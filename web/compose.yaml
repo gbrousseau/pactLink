@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:17-alpine
+    ports:
+      - "127.0.0.1:55439:5432"
+    environment:
+      POSTGRES_USER: deflection_dev
+      POSTGRES_PASSWORD: synthetic_data_only
+      POSTGRES_DB: deflection_dev
+    volumes:
+      - deflection_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deflection_dev -d deflection_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  deflection_dev_data:
