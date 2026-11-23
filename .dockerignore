@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/.next
+**/.env*
+**/*.tsbuildinfo
+import.csv
+forms_screenshots-*.png
+redcap_screenshot-*.png
+report_screenshot-*.png
+.~lock.*

@@ -29,7 +29,7 @@ export const housingOptions = [
 export const intakeSections: IntakeSection[] = [
   {
     title: "Participant",
-    description: "Program and participant identity. Fields marked * are required when submitting, not when saving a draft.",
+    description: "Program and participant identity. Answer every applicable question before requesting review; drafts may be incomplete.",
     fields: [
       { key: "programType", label: "Program type", type: "single", options: programs, required: true },
       { key: "name", label: "Name (first, middle, last)", type: "text", required: true },

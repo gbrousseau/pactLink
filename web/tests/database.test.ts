@@ -2,10 +2,15 @@ import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { saveSubmission, getSubmission, listSubmissions, getAudit, getRevisions, changeArchive, searchSchema } from "../src/lib/submissions";
+import { saveSubmission, getSubmission, listSubmissions, getAudit, getRevisions, getApprovedVersions, getReviewDecisions, requestReview, decideReview, changeArchive, searchSchema } from "../src/lib/submissions";
 import { database } from "../src/lib/db";
 import type { User } from "../src/lib/access";
 import type { Answers } from "../src/lib/intake-validation";
+import { intakeFields, otherOption } from "../src/lib/intake-fields";
+import { getImportSource, importIntakes, parseIntakeImport } from "../src/lib/intake-import";
+import { changeImportedRemoval, eligibleForBatchUndo, getBatchPreview, getRemovalHistory, importHashState, undoImportBatch } from "../src/lib/import-removal";
+import { changePrototypeRemoval, createPrototypeExport, downloadPrototype, listPrototypeExports } from "../src/lib/redcap-prototype";
+import { loadRedcapCodebook } from "../src/lib/redcap-codebook";
 
 const integration = process.env.TEST_DATABASE_ADMIN_URL;
 const suite = integration ? describe : describe.skip;
@@ -13,7 +18,25 @@ const north: User = { id: "north-editor", display_name: "North", role: "editor",
 const south: User = { ...north, id: "south-editor", group_id: "south" };
 const viewer: User = { ...north, id: "north-viewer", role: "viewer" };
 const admin: User = { ...north, id: "demo-admin", role: "admin" };
+const reviewer: User = { ...north, id: "north-reviewer", role: "reviewer" };
+const southReviewer: User = { ...south, id: "south-reviewer", role: "reviewer" };
 const answers: Answers = { name: "Synthetic Test Record", dob: "1990-01-01", programType: "Deflection", date: "2026-01-01", navigator: "Demo Navigator" };
+function completeAnswers(): Answers {
+  const result: Answers = {};
+  for (const field of intakeFields) {
+    if (field.when) continue;
+    result[field.key] = field.type === "multi" ? [field.options![0]] :
+      field.type === "single" ? field.options![0] : field.type === "date" ? "2000-01-01" :
+        field.type === "tel" ? "503-555-0100" : "Synthetic answer";
+    if (otherOption(field) && (Array.isArray(result[field.key]) ? result[field.key].includes(otherOption(field)!) : result[field.key] === otherOption(field))) {
+      result[`${field.key}Other`] = "Synthetic other";
+    }
+  }
+  result.dob = "1990-01-01";
+  result.name = "Synthetic Test Record";
+  result.qualified = "Yes";
+  return result;
+}
 let management: Pool;
 let testName: string;
 async function seedSubmitted(user: User, value: Answers = answers) {
@@ -40,6 +63,44 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     const url = new URL(integration!); url.pathname = `/${testName}`;
     process.env.DATABASE_URL = url.toString();
     await database().query(await readFile(new URL("../db/001-initial.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/002-review-workflow.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/003-intake-import.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/004-import-removal.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/005-redcap-prototype.sql", import.meta.url), "utf8"));
+  });
+  it("restricts, preserves and audits synthetic REDCap prototype files", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    const codebook = await loadRedcapCodebook();
+    const form = new FormData();
+    form.set("synthetic", "yes"); form.set("codebookHash", codebook.hash); form.set("id", "synthetic-123"); form.set("confirmRecordId", "synthetic-123"); form.set("race", "1");
+    await expect(createPrototypeExport(reviewer, id, 1, form)).rejects.toMatchObject({ code: "conflict" });
+    await requestReview(north, id, 1);
+    await decideReview(reviewer, id, 2, "approve", "");
+    await expect(createPrototypeExport(north, id, 1, form)).rejects.toMatchObject({ code: "missing" });
+    await expect(createPrototypeExport(southReviewer, id, 1, form)).rejects.toMatchObject({ code: "missing" });
+    const first = await createPrototypeExport(reviewer, id, 1, form);
+    form.delete("id"); form.delete("confirmRecordId");
+    const second = await createPrototypeExport(admin, id, 1, form);
+    expect(await listPrototypeExports(reviewer, id)).toHaveLength(2);
+    const file = JSON.parse(await downloadPrototype(reviewer, id, first));
+    expect(file.record).toEqual({ id: "synthetic-123", race___1: "1" });
+    expect(JSON.parse(await downloadPrototype(reviewer, id, second)).record).toEqual({ race___1: "1" });
+    await expect(downloadPrototype(viewer, id, first)).rejects.toMatchObject({ code: "missing" });
+    await expect(database().query("UPDATE redcap_prototype_exports SET payload='{}' WHERE id=$1", [first])).rejects.toThrow();
+    await changePrototypeRemoval(reviewer, id, first, false);
+    await expect(downloadPrototype(reviewer, id, first)).rejects.toMatchObject({ code: "missing" });
+    await changePrototypeRemoval(admin, id, first, true);
+    expect(JSON.parse(await downloadPrototype(admin, id, first))).toEqual(file);
+    await database().query("UPDATE submissions SET legal_hold=true WHERE id=$1", [id]);
+    await expect(changePrototypeRemoval(reviewer, id, second, false)).rejects.toMatchObject({ code: "invalid" });
+    await database().query("UPDATE submissions SET legal_hold=false WHERE id=$1", [id]);
+    await saveSubmission(north, { ...completeAnswers(), name: "Changed Synthetic Name" }, id, 3);
+    await expect(createPrototypeExport(reviewer, id, 1, form)).rejects.toMatchObject({ code: "conflict" });
+    expect(await downloadPrototype(reviewer, id, second)).toContain("SYNTHETIC PROTOTYPE");
+    const audit = await getAudit(admin, id);
+    for (const action of ["redcap_prototype_create", "redcap_prototype_download", "redcap_prototype_remove", "redcap_prototype_restore"]) {
+      expect(audit.some((event) => event.action === action)).toBe(true);
+    }
   });
   afterAll(async () => {
     if (management) {
@@ -48,6 +109,41 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
         await management.query(`DROP DATABASE "${testName}"`);
       }
       await management.end();
+    }
+  });
+  it("migrates existing records without inventing approvals or losing draft contributors", async () => {
+    const name = `intake_migration_${randomUUID().replaceAll("-", "")}`;
+    await management.query(`CREATE DATABASE "${name}"`);
+    const url = new URL(integration!); url.pathname = `/${name}`;
+    const old = new Pool({ connectionString: url.toString() });
+    try {
+      await old.query(await readFile(new URL("../db/001-initial.sql", import.meta.url), "utf8"));
+      const participant = randomUUID(), enrollment = randomUUID(), draft = randomUUID(), legacy = randomUUID();
+      await old.query("INSERT INTO participants(id,group_id) VALUES ($1,'north')", [participant]);
+      await old.query("INSERT INTO enrollments(id,participant_id) VALUES ($1,$2)", [enrollment, participant]);
+      await old.query(
+        `INSERT INTO submissions(id,enrollment_id,group_id,status,answers,participant_name,created_by,updated_by)
+         VALUES ($1,$3,'north','draft','{}','Old draft','north-editor','north-editor'),
+                ($2,$3,'north','submitted','{}','Old submitted','north-editor','north-editor')`,
+        [draft, legacy, enrollment],
+      );
+      await old.query(
+        `INSERT INTO form_revisions(submission_id,revision,answers,status,actor_id)
+         VALUES ($1,1,'{}','draft','north-editor'),($2,1,'{}','submitted','north-editor')`, [draft, legacy],
+      );
+      await old.query(await readFile(new URL("../db/002-review-workflow.sql", import.meta.url), "utf8"));
+      const rows = await old.query<{ id: string; review_state: string; participant_name: string }>(
+        "SELECT id,review_state,participant_name FROM submissions ORDER BY participant_name",
+      );
+      expect(rows.rows).toEqual([
+        { id: draft, review_state: "draft", participant_name: "Old draft" },
+        { id: legacy, review_state: "legacy", participant_name: "Old submitted" },
+      ]);
+      expect((await old.query("SELECT * FROM approved_intake_versions")).rowCount).toBe(0);
+      expect((await old.query("SELECT user_id FROM draft_contributors WHERE submission_id=$1", [draft])).rows).toEqual([{ user_id: "north-editor" }]);
+    } finally {
+      await old.end();
+      await management.query(`DROP DATABASE "${name}"`);
     }
   });
   it("persists, scopes reads and counts, rejects viewers, and audits changes", async () => {
@@ -69,6 +165,98 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     expect(await getRevisions(south, id)).toEqual([]);
     const events = await getAudit(north, id);
     expect(events.some((event) => event.action === "save_draft" && event.changed_fields.includes("phone"))).toBe(true);
+  });
+  it("requires complete answers and explicit permissions before requesting review", async () => {
+    const id = await saveSubmission(north, answers);
+    await expect(requestReview(north, id, 1)).rejects.toMatchObject({ code: "invalid" });
+    await expect(requestReview(viewer, id, 1)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(saveSubmission(reviewer, answers)).rejects.toMatchObject({ code: "forbidden" });
+    expect(await getApprovedVersions(north, id)).toEqual([]);
+    expect((await getSubmission(north, id))?.revision).toBe(1);
+  });
+  it("approves separate immutable snapshots and keeps the previous approval while editing", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    await requestReview(north, id, 1);
+    expect((await getSubmission(north, id))?.review_state).toBe("pending_review");
+    await expect(decideReview(viewer, id, 2, "approve")).rejects.toMatchObject({ code: "forbidden" });
+    await expect(decideReview(southReviewer, id, 2, "approve")).rejects.toMatchObject({ code: "missing" });
+    await decideReview(reviewer, id, 2, "approve");
+    expect((await getSubmission(north, id))?.review_state).toBe("approved");
+    expect((await getApprovedVersions(north, id))[0]).toMatchObject({ version: 1, draft_revision: 2, approved_by: reviewer.id });
+    expect(await getApprovedVersions(south, id)).toEqual([]);
+    await saveSubmission(north, { ...completeAnswers(), name: "Synthetic Updated" }, id, 3);
+    expect((await getSubmission(north, id))?.review_state).toBe("draft");
+    expect((await getApprovedVersions(north, id))[0].answers.name).toBe("Synthetic Test Record");
+    await requestReview(north, id, 4);
+    await decideReview(reviewer, id, 5, "approve");
+    const versions = await getApprovedVersions(north, id);
+    expect(versions.map((v) => v.version)).toEqual([2, 1]);
+    expect(versions[0].answers.name).toBe("Synthetic Updated");
+    expect(versions[1].answers.name).toBe("Synthetic Test Record");
+    await expect(database().query("UPDATE approved_intake_versions SET version=99 WHERE submission_id=$1", [id])).rejects.toThrow("append-only");
+    expect((await getReviewDecisions(north, id)).map((d) => d.decision)).toEqual(["approved", "approved"]);
+  });
+  it("enforces separation of duties and rejects stale review decisions after editing", async () => {
+    const id = await saveSubmission(admin, completeAnswers());
+    await requestReview(admin, id, 1);
+    await expect(decideReview(admin, id, 2, "approve")).rejects.toMatchObject({ code: "forbidden" });
+    await saveSubmission(north, { ...completeAnswers(), name: "Changed after request" }, id, 2);
+    expect((await getSubmission(north, id))?.review_state).toBe("draft");
+    await expect(decideReview(reviewer, id, 2, "approve")).rejects.toMatchObject({ code: "conflict" });
+    await requestReview(north, id, 3);
+    await expect(decideReview(admin, id, 4, "approve")).rejects.toMatchObject({ code: "forbidden" });
+    await decideReview(reviewer, id, 4, "approve");
+    expect((await getApprovedVersions(north, id))[0].editor_ids).toEqual(["demo-admin", "north-editor"]);
+  });
+  it("returns a draft with a reason and allows resubmission without losing history", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    await requestReview(north, id, 1);
+    await expect(decideReview(reviewer, id, 2, "return", "  ")).rejects.toMatchObject({ code: "invalid" });
+    await decideReview(reviewer, id, 2, "return", "Correct the contact date");
+    expect((await getSubmission(north, id))?.return_reason).toBe("Correct the contact date");
+    expect((await getReviewDecisions(north, id))[0]).toMatchObject({ decision: "returned", reason: "Correct the contact date" });
+    expect(await getApprovedVersions(north, id)).toEqual([]);
+    await saveSubmission(north, completeAnswers(), id, 3);
+    await requestReview(north, id, 4);
+    await decideReview(reviewer, id, 5, "approve");
+    expect((await getApprovedVersions(north, id))).toHaveLength(1);
+    expect((await getReviewDecisions(north, id))).toHaveLength(2);
+  });
+  it("allows only one concurrent reviewer decision for a revision", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    await requestReview(north, id, 1);
+    const results = await Promise.allSettled([
+      decideReview(reviewer, id, 2, "approve"),
+      decideReview(admin, id, 2, "approve"),
+    ]);
+    expect(results.filter((entry) => entry.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((entry) => entry.status === "rejected")).toHaveLength(1);
+    expect(await getApprovedVersions(north, id)).toHaveLength(1);
+    expect(await getReviewDecisions(north, id)).toHaveLength(1);
+  });
+  it("does not list archived approvals in the active approved filter", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    await requestReview(north, id, 1);
+    await decideReview(reviewer, id, 2, "approve");
+    await changeArchive(north, id, 3, false);
+    expect((await listSubmissions(north, searchSchema.parse({ status: "approved" }))).records.some((r) => r.id === id)).toBe(false);
+    expect((await listSubmissions(north, searchSchema.parse({ status: "archived" }))).records.some((r) => r.id === id)).toBe(true);
+    expect(await getApprovedVersions(north, id)).toHaveLength(1);
+  });
+  it("rolls back approval when its audit write fails", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    await requestReview(north, id, 1);
+    await database().query(`CREATE FUNCTION fail_review_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.action='approve_review' THEN RAISE EXCEPTION 'Simulated review audit failure'; END IF; RETURN NEW; END; $$;
+      CREATE TRIGGER test_review_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_review_audit();`);
+    try {
+      await expect(decideReview(reviewer, id, 2, "approve")).rejects.toThrow("Simulated review audit failure");
+      expect((await getSubmission(north, id))?.review_state).toBe("pending_review");
+      expect(await getApprovedVersions(north, id)).toEqual([]);
+      expect(await getReviewDecisions(north, id)).toEqual([]);
+    } finally {
+      await database().query("DROP TRIGGER test_review_audit ON audit_events; DROP FUNCTION fail_review_audit();");
+    }
   });
   it("saves edits to existing submitted records as drafts", async () => {
     const id = await seedSubmitted(north);
@@ -128,5 +316,115 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await expect(database().query("UPDATE audit_events SET action='forged'")).rejects.toThrow("append-only");
     expect((await listSubmissions(north, searchSchema.parse({ q: "%" }))).total).toBe(0);
     expect((await listSubmissions(north, searchSchema.parse({ q: "Synthetic", sort: "name", direction: "asc" }))).total).toBeGreaterThan(0);
+  });
+  it("imports drafts for administrators, tracks placeholders, scopes source data, and prevents duplicate files", async () => {
+    const header = "DOB\tHouseless\tGender\tRace\tAGENCY\tLEA #\tDA #\tCOURT #\tCHARGE CODE\tCHARGE DESCRIPT\tINCIDENT/REFERRAL DATE\tREVIEW STATUS\tHB 4002 REPORTING\tDEFLECT OUTCOME\tCD OUTCOME\tREFERRAL TYPE\tOUTCOME 2\tSUBSTANCE\tSUBSTANCE 2\tDEATHS\tRE-OFFENSE\tNOTES\tOUTCOME3\tARRESTED\tWEIGHT";
+    const row = Array(25).fill(""); row[0] = "unknown"; row[21] = "synthetic note";
+    const parsed = parseIntakeImport(new TextEncoder().encode(`${header}\n${row.join("\t")}\ninvalid\n`));
+    expect(parsed.issues).toHaveLength(1);
+    await expect(importIntakes(north, "south", parsed)).rejects.toMatchObject({ code: "forbidden" });
+    await importIntakes(admin, "south", parsed);
+    await expect(importIntakes(admin, "north", parsed)).rejects.toMatchObject({ code: "conflict" });
+    const result = await database().query<{ submission_id: string }>("SELECT submission_id FROM intake_import_sources WHERE source->>'NOTES'='synthetic note'");
+    const id = result.rows[0].submission_id;
+    expect((await getSubmission(south, id))?.status).toBe("draft");
+    expect(await getImportSource(north, id)).toBeNull();
+    expect((await getImportSource(south, id))?.placeholder_fields).toEqual(["name", "dob"]);
+    await expect(requestReview(south, id, 1)).rejects.toThrow("placeholder");
+    const completed = completeAnswers();
+    await saveSubmission(south, completed, id, 1);
+    expect((await getImportSource(south, id))?.placeholder_fields).toEqual([]);
+    await requestReview(south, id, 2);
+    await decideReview(southReviewer, id, 3, "approve");
+    expect((await getSubmission(south, id))?.review_state).toBe("approved");
+    await saveSubmission(south, { ...completed, dob: "1900-01-01" }, id, 4);
+    expect((await getImportSource(south, id))?.placeholder_fields).toEqual(["dob"]);
+    await expect(requestReview(south, id, 5)).rejects.toThrow("placeholder");
+  });
+  it("rolls back the entire import if any valid row fails to save", async () => {
+    const header = "DOB\tHouseless\tGender\tRace\tAGENCY\tLEA #\tDA #\tCOURT #\tCHARGE CODE\tCHARGE DESCRIPT\tINCIDENT/REFERRAL DATE\tREVIEW STATUS\tHB 4002 REPORTING\tDEFLECT OUTCOME\tCD OUTCOME\tREFERRAL TYPE\tOUTCOME 2\tSUBSTANCE\tSUBSTANCE 2\tDEATHS\tRE-OFFENSE\tNOTES\tOUTCOME3\tARRESTED\tWEIGHT";
+    const row = Array(25).fill(""); row[0] = "1/1/2000"; row[21] = "rollback test";
+    const parsed = parseIntakeImport(new TextEncoder().encode(`${header}\n${row.join("\t")}\n`));
+    await database().query(`CREATE FUNCTION fail_import_test() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.action='import_draft' THEN RAISE EXCEPTION 'Simulated import failure'; END IF; RETURN NEW; END; $$;
+      CREATE TRIGGER test_import_failure BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_import_test();`);
+    try {
+      await expect(importIntakes(admin, "south", parsed)).rejects.toThrow("Simulated import failure");
+      expect((await database().query("SELECT 1 FROM intake_import_batches WHERE file_hash=$1", [parsed.hash])).rowCount).toBe(0);
+      expect((await database().query("SELECT 1 FROM intake_import_sources WHERE source->>'NOTES'='rollback test'")).rowCount).toBe(0);
+    } finally {
+      await database().query("DROP TRIGGER test_import_failure ON audit_events; DROP FUNCTION fail_import_test();");
+    }
+    await expect(importIntakes(admin, "south", parsed)).resolves.toBeTruthy();
+  });
+  it("undoes only untouched drafts, requires a fresh preview, protects holds, and retains history", async () => {
+    const header = "DOB\tHouseless\tGender\tRace\tAGENCY\tLEA #\tDA #\tCOURT #\tCHARGE CODE\tCHARGE DESCRIPT\tINCIDENT/REFERRAL DATE\tREVIEW STATUS\tHB 4002 REPORTING\tDEFLECT OUTCOME\tCD OUTCOME\tREFERRAL TYPE\tOUTCOME 2\tSUBSTANCE\tSUBSTANCE 2\tDEATHS\tRE-OFFENSE\tNOTES\tOUTCOME3\tARRESTED\tWEIGHT";
+    const row = Array(25).fill(""); row[21] = "undo case";
+    const parsed = parseIntakeImport(new TextEncoder().encode(`${header}\n${row.join("\t")}\n${row.join("\t")}\n${row.join("\t")}\n`));
+    const batch = await importIntakes(admin, "north", parsed);
+    const initial = await getBatchPreview(admin, batch);
+    await expect(getBatchPreview(north, batch)).rejects.toMatchObject({ code: "forbidden" });
+    await saveSubmission(north, { name: "Synthetic edited", dob: "1990-01-01" }, initial.rows[1].id, 1);
+    await database().query("UPDATE submissions SET legal_hold=true WHERE id=$1", [initial.rows[2].id]);
+    await expect(undoImportBatch(admin, batch, initial.token, "test")).rejects.toMatchObject({ code: "conflict" });
+    const current = await getBatchPreview(admin, batch);
+    expect(current.rows.filter(eligibleForBatchUndo)).toHaveLength(1);
+    await expect(undoImportBatch(north, batch, current.token, "test")).rejects.toMatchObject({ code: "forbidden" });
+    expect(await undoImportBatch(admin, batch, current.token, "incorrect import")).toBe(1);
+    const id = initial.rows[0].id;
+    expect(await getSubmission(north, id)).toBeNull();
+    expect((await getSubmission(admin, id))?.removed_at).toBeTruthy();
+    expect((await getRemovalHistory(admin, id))[0]).toMatchObject({ action: "batch_undo", reason: "incorrect import" });
+    expect((await getImportSource(admin, id))?.source.NOTES).toBe("undo case");
+    await expect(saveSubmission(admin, answers, id, 2)).rejects.toThrow("Restore");
+    await expect(importIntakes(admin, "north", parsed, true)).rejects.toMatchObject({ code: "conflict" });
+    expect((await importHashState(admin, parsed.hash)).active).toBe(2);
+    await expect(changeImportedRemoval(admin, initial.rows[2].id, 1, "duplicate", "test", initial.rows[1].id)).rejects.toThrow("legal hold");
+    await changeImportedRemoval(admin, id, 2, "restore", "restore by mistake");
+    expect((await getSubmission(north, id))?.removed_at).toBeNull();
+    expect((await getRemovalHistory(admin, id)).map((event) => event.action)).toEqual(["restore", "batch_undo"]);
+  });
+  it("removes duplicates and only allows confirmed re-import after every prior record is removed", async () => {
+    const header = "DOB\tHouseless\tGender\tRace\tAGENCY\tLEA #\tDA #\tCOURT #\tCHARGE CODE\tCHARGE DESCRIPT\tINCIDENT/REFERRAL DATE\tREVIEW STATUS\tHB 4002 REPORTING\tDEFLECT OUTCOME\tCD OUTCOME\tREFERRAL TYPE\tOUTCOME 2\tSUBSTANCE\tSUBSTANCE 2\tDEATHS\tRE-OFFENSE\tNOTES\tOUTCOME3\tARRESTED\tWEIGHT";
+    const row = Array(25).fill(""); row[21] = "duplicate test";
+    const parsed = parseIntakeImport(new TextEncoder().encode(`${header}\n${row.join("\t")}\n`));
+    const target = await saveSubmission(north, answers);
+    const batch = await importIntakes(admin, "north", parsed);
+    const id = (await getBatchPreview(admin, batch)).rows[0].id;
+    await expect(changeImportedRemoval(north, id, 1, "duplicate", "duplicate", target)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(changeImportedRemoval(admin, id, 1, "duplicate", "", target)).rejects.toMatchObject({ code: "invalid" });
+    await expect(changeImportedRemoval(admin, id, 1, "duplicate", "duplicate", id)).rejects.toMatchObject({ code: "invalid" });
+    await changeImportedRemoval(admin, id, 1, "duplicate", "already entered", target);
+    expect((await getRemovalHistory(admin, id))[0]).toMatchObject({ action: "duplicate", duplicate_of: target, reason: "already entered" });
+    expect((await listSubmissions(admin, searchSchema.parse({ status: "removed", q: "Synthetic placeholder" }))).records.some((s) => s.id === id)).toBe(true);
+    await expect(importIntakes(admin, "north", parsed)).rejects.toThrow("Explicitly confirm");
+    const secondBatch = await importIntakes(admin, "south", parsed, true);
+    await expect(changeImportedRemoval(admin, id, 2, "restore", "restore")).rejects.toMatchObject({ code: "conflict" });
+    const second = await getBatchPreview(admin, secondBatch);
+    await undoImportBatch(admin, secondBatch, second.token, "wrong group");
+    await changeImportedRemoval(admin, id, 2, "restore", "restore");
+    expect((await getSubmission(admin, id))?.removed_at).toBeNull();
+  });
+  it("rolls back batch removal on audit failure and serializes concurrent re-imports", async () => {
+    const header = "DOB\tHouseless\tGender\tRace\tAGENCY\tLEA #\tDA #\tCOURT #\tCHARGE CODE\tCHARGE DESCRIPT\tINCIDENT/REFERRAL DATE\tREVIEW STATUS\tHB 4002 REPORTING\tDEFLECT OUTCOME\tCD OUTCOME\tREFERRAL TYPE\tOUTCOME 2\tSUBSTANCE\tSUBSTANCE 2\tDEATHS\tRE-OFFENSE\tNOTES\tOUTCOME3\tARRESTED\tWEIGHT";
+    const row = Array(25).fill(""); row[21] = "undo rollback";
+    const parsed = parseIntakeImport(new TextEncoder().encode(`${header}\n${row.join("\t")}\n${row.join("\t")}\n`));
+    const batch = await importIntakes(admin, "north", parsed);
+    const initial = await getBatchPreview(admin, batch);
+    await database().query(`CREATE FUNCTION fail_removal_test() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.action='import_batch_undo' THEN RAISE EXCEPTION 'Simulated removal failure'; END IF; RETURN NEW; END; $$;
+      CREATE TRIGGER test_removal_failure BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_removal_test();`);
+    try {
+      await expect(undoImportBatch(admin, batch, initial.token, "test")).rejects.toThrow("Simulated removal failure");
+      expect((await getBatchPreview(admin, batch)).rows.every((entry) => !entry.removed_at && entry.revision === 1)).toBe(true);
+      expect(await getRemovalHistory(admin, initial.rows[0].id)).toEqual([]);
+    } finally {
+      await database().query("DROP TRIGGER test_removal_failure ON audit_events; DROP FUNCTION fail_removal_test();");
+    }
+    await undoImportBatch(admin, batch, initial.token, "test");
+    const results = await Promise.allSettled([importIntakes(admin, "north", parsed, true), importIntakes(admin, "south", parsed, true)]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect((await importHashState(admin, parsed.hash)).active).toBe(2);
   });
 });

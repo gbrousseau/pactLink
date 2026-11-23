@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Deflection Workspace",
-  description: "Development-only, access-controlled deflection intake pilot.",
+  description: "Synthetic-data deflection intake demo.",
   robots: { index: false, follow: false },
 };
 

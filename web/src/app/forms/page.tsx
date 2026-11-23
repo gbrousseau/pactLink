@@ -23,7 +23,10 @@ export default async function Forms({ searchParams }: { searchParams: Promise<Re
         <h1 className="text-3xl font-bold tracking-tight">Form library</h1>
         <p className="mt-2 text-sm text-slate-500">Find, review, and manage {user.role === "admin" ? "all groups' " : "your group's "}intake submissions.</p>
       </div>
-      {user.role !== "viewer" && <Link href="/forms/new" className="btn-primary"><Plus size={18} />New intake</Link>}
+      <div className="flex flex-wrap gap-3">
+        {user.role === "admin" && <Link href="/forms/import" className="btn-secondary">Import intakes</Link>}
+        {(user.role === "editor" || user.role === "admin") && <Link href="/forms/new" className="btn-primary"><Plus size={18} />New intake</Link>}
+      </div>
     </div>
     <div className="grid gap-4 sm:grid-cols-3">
       <div className="panel !p-5"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Available form</p><p className="mt-2 text-lg font-bold">Intake</p><p className="mt-1 text-xs text-slate-500">Packet version 09.24.2026</p></div>
@@ -36,7 +39,7 @@ export default async function Forms({ searchParams }: { searchParams: Promise<Re
           <div className="relative mt-2"><SearchIcon size={17} className="absolute left-3 top-3 text-slate-400" /><input name="q" defaultValue={typeof raw.q === "string" ? raw.q : ""} maxLength={100} className="input !pl-9" placeholder="Search authorized records..." /></div>
         </label>
         <label className="text-xs font-semibold">Status<select name="status" defaultValue={search.status} className="input mt-2">
-          <option value="active">Active (draft + submitted)</option><option value="all">All including archived</option><option value="draft">Draft</option><option value="submitted">Submitted</option><option value="archived">Archived</option>
+          <option value="active">Active intakes</option><option value="all">All including archived</option><option value="draft">Draft</option><option value="pending_review">Awaiting review</option><option value="returned">Returned for changes</option><option value="approved">Approved</option><option value="submitted">Submitted (includes legacy)</option><option value="archived">Archived</option>{user.role === "admin" && <option value="removed">Removed imports</option>}
         </select></label>
         <label className="text-xs font-semibold">Program type<select name="program" defaultValue={search.program} className="input mt-2"><option value="">All programs</option>{programs.map((p) => <option key={p}>{p}</option>)}</select></label>
         <label className="text-xs font-semibold">Navigator<input name="navigator" maxLength={100} defaultValue={search.navigator} className="input mt-2" /></label>
@@ -58,12 +61,12 @@ export default async function Forms({ searchParams }: { searchParams: Promise<Re
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>{["Participant", "Program", "Status", "Updated", "Open"].map((label) => <th key={label} className="px-5 py-4">{label}</th>)}</tr></thead>
           <tbody>{result.records.map((row) => <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
             <td className="px-5 py-4"><Link href={`/forms/${row.id}`} className="font-semibold text-teal-900 hover:underline">{row.participant_name || "Unnamed draft"}</Link><p className="mt-1 text-xs text-slate-500">DOB: {row.date_of_birth ?? "Unanswered"}</p></td>
-            <td className="px-5 py-4">{row.program_type ?? "Not selected"}</td><td className="px-5 py-4"><Status status={row.status} /></td><td className="px-5 py-4 text-slate-500">{formatDate(row.updated_at)}</td>
+            <td className="px-5 py-4">{row.program_type ?? "Not selected"}</td><td className="px-5 py-4"><Status status={row.status} reviewState={row.review_state} removed={!!row.removed_at} /></td><td className="px-5 py-4 text-slate-500">{formatDate(row.updated_at)}</td>
             <td className="px-5 py-4"><Link aria-label={`Open intake for ${row.participant_name || "unnamed participant"}`} href={`/forms/${row.id}`} className="text-teal-800"><ArrowUpRight size={18} /></Link></td>
           </tr>)}</tbody>
         </table></div>
         <div className="grid gap-3 md:hidden">{result.records.map((row) => <Link key={row.id} href={`/forms/${row.id}`} className="panel !p-5">
-          <div className="flex items-center justify-between gap-3"><h2 className="font-bold">{row.participant_name || "Unnamed draft"}</h2><Status status={row.status} /></div>
+          <div className="flex items-center justify-between gap-3"><h2 className="font-bold">{row.participant_name || "Unnamed draft"}</h2><Status status={row.status} reviewState={row.review_state} removed={!!row.removed_at} /></div>
           <p className="mt-2 text-sm text-slate-600">{row.program_type ?? "Program not selected"}</p><p className="mt-2 text-xs text-slate-500">DOB: {row.date_of_birth ?? "Unanswered"} · Updated {formatDate(row.updated_at)}</p>
         </Link>)}</div>
       </>}

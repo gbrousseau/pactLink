@@ -1,0 +1,1315 @@
+Oregon Behavioral Health Deflection					
+REDCap Codebook - Active variables					
+					
+					
+#	Variable/Field Name	"Field Label
+Field Note"	Field Attributes (Field Type, Validation, Choices, Calculations, etc.)		
+Instrument: Participant Identification (participant_identification)					
+1	[id]	Record ID	text		
+2	[alt_id]	"Alternative ID (if used by site)
+This field should not contain any identifiable information (e.g., full name, dates, etc.)"	text, Identifier Custom alignment: LV		
+3	[first_name]	"Section Header: Participant ID information
+First name"	text, Required, Identifier Custom alignment: LV		
+4	[first_name_2]	Re-enter first name	text, Required, Identifier Custom alignment: LV		
+6	[middle_name]	Middle name	text, Identifier Custom alignment: LV		
+7	[middle_name_2]	Re-enter middle name	text, Identifier Custom alignment: LV		
+9	[last_name]	Last name	text, Required, Identifier Custom alignment: LV		
+10	[last_name_2]	Re-enter last name	text, Required, Identifier Custom alignment: LV		
+12	[dob]	Date of birth	text (date_mdy, Max: today), Required, Identifier Custom alignment: LV		
+13	[dob_2]	Re-enter date of birth	text (date_mdy, Max: today), Required, Identifier Custom alignment: LV		
+17	[sid]	"State Identification Number (SID)
+This is the number assigned to an individual upon fingerprinting"	"text (number), Identifier Custom alignment: LV
+Field Annotation: @CHARLIMIT =8"		
+18	[sid_2]	Re-enter State Identification Number (SID)	"text (number), Identifier Custom alignment: LV
+Field Annotation: @CHARLIMIT =8"		
+20	[participant_identification_complete]	Section Header: Form Status	"dropdown
+0	Incomplete
+1	Unverified
+2	Complete"		
+			0	Incomplete	
+			1	Unverified	
+			2	Complete	
+					
+Instrument: Demographics (demographics)					
+21	[race]	"Section Header: DemographicsPlease update this form if you receive new information that was previously missing.Whenever possible, demographic information should be self-reported by the participant.
+Race/ethnicity 
+Check all that apply"	checkbox		
+			1	race___1	American Indian or Alaska Native
+			2	race___2	Asian
+			3	race___3	Black or African American
+			4	race___4	Hispanic or Latino
+			5	race___5	Middle Eastern or North African
+			6	race___6	Native Hawaiian or Pacific Islander
+			7	race___7	White
+			999	race___999	Different race {race_other}
+			777	race___777	Prefer not to answer
+			888	race___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='777,888'"		
+22	"[race_other]
+Show the field ONLY if: [race(999)] = '1'"	Other race	text, Required  Custom alignment: LV		
+23	[gender]	"Gender identity
+Check all that apply"	checkbox		
+			1	gender___1	Male
+			2	gender___2	Female
+			5	gender___5	Non-binary
+			6	gender___6	Two-Spirit
+			4	gender___4	Transgender
+			999	gender___999	Additional gender category {gender_other}
+			777	gender___777	Prefer not to answer
+			888	gender___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='777,888' @HIDECHOICE='3'"		
+24	"[gender_other]
+Show the field ONLY if: [gender(999)] = '1"	Other gender	text, Required  Custom alignment:LV		
+27	[disability]	"Disability Does the individual have any of the following functional limitations because of a physical, mental, or emotional condition? 
+Check all that apply"	checkbox		
+			1	disability___1	Hearing - Deaf or serious difficulty hearing
+			2	disability___2	Vision - Blind or serious difficulty seeing, even when wearing glasses
+			3	disability___3	Cognition - Serious difficulty concentrating, remembering, or making decisions
+			4	disability___4	Mobility - Serious difficulty walking or climbing stairs
+			5	disability___5	Self-care - Difficulty dressing or bathing
+			6	disability___6	Independent living - Difficulty doing errands alone such as visiting a doctor's office or shopping
+			7	disability___7	None
+			888	disability___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='7,888' @HIDECHOICE='999'"		
+31	[demographics_complete]	"Section Header: Form Status
+Complete?"	"dropdown
+"		
+			0	Incomplete	
+			1	Unverified	
+			2	Complete	
+					
+32	[first_contact_date]	"Section Header: First point of contact This is the point at which an individual is first encountered and referred to deflection
+Date of first point of contact"	"text (date_mdy, Max: today), Identifier 
+Custom alignment: LV"		
+34	[first_contact_by]	Who was the first point of contact with the participant? This is the person who encounters a potential participant and initiates the referral to deflection	radio		
+			1	Law enforcement	
+			2	First responder (EMS, Fire)	
+			3	Mobile Crisis/Crisis Response Team	
+			4	Multi-disciplinary deflection response team	
+			5	Social worker	
+			6	Behavioral Health treatment provider	
+			7	Case manager	
+			8	Peer support worker/navigator	
+			9	District attorney's office	
+			10	Deflection coordinator	
+			11	Jail staff	
+			12	Community corrections staff (e.g. parole, probation, supervision)	
+			999	Other {first_contact_by_other}	
+			888	Don't know	
+			Custom alignment: LV		
+35	"[first_contact_by_other]
+Show the field ONLY if: [first_contact_by] = '999'"	Other FPOC	"text, Required
+Custom alignment: LV"		
+36	[first_contact_loc]	Location of first point of contact	radio		
+			1	On the street (on view) - includes any public place (e.g. park, restaurant, office, traffic stop)	
+			2	Police department	
+			3	Fire station	
+			4	Emergency Department	
+			5	Hospital inpatient	
+			6	Homeless camp	
+			7	Residence	
+			8	In the community (e.g. FQHC, shelter, crisis center, CBO, or place providing social services)	
+			9	Court	
+			10	Jail	
+			11	Community corrections (e.g. parole, probation, supervision)	
+			999	Other {first_contact_loc_other}	
+			888	Don't know	
+			Custom alignment: LV		
+37	"[first_contact_loc_other]
+Show the field ONLY if: [first_contact_loc] = '999'"	Other location of FPOC	text, Required Custom alignment: LV		
+38	[ref_pathway]	"Referral pathway
+Hover over each pathway for definitions and examples Self- Referral Active Outreach Naloxone Plus First Responder and Officer Referral Officer Intervention Community Response"	radio		
+			6	Self-Referral	
+			3	Active Outreach	
+			4	Naloxone Plus	
+			1	First Responder and Officer Referral	
+			2	Officer Intervention	
+			7	Community Response	
+			"Custom alignment: LV
+Field Annotation: @HIDECHOICE='5,888,999'"		
+40	[handoff_type]	"Type of handoff
+This describes how a person is referred to and enters the program 
+Check all that apply"	checkbox		
+			1	handoff_type___1	Instructions to contact or report to deflection team staff/coordinator
+			2	handoff_type___2	Instructions to report to community court
+			3	handoff_type___3	Instructions to report to BH provider for screening/assessment
+			4	handoff_type___4	Referral to deflection team for outreach to participant
+			5	handoff_type___5	Warm handoff at deflection drop-off center
+			6	handoff_type___6	Warm handoff at stabilization/sobering center
+			7	handoff_type___7	Warm handoff on scene to deflection navigator/case manager
+			8	handoff_type___8	Warm handoff to peer
+			999	handoff_type___999	Other {handoff_type_other}
+			888	handoff_type___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+41	"[handoff_type_other]
+Show the field ONLY if: [handoff_type(999)] = '1'"	Other handoff	"text, Required
+Custom alignment: LV"		
+42	[deflection_referral_complete]	"Section Header: Form Status
+Complete?"	dropdown		
+			0	Incomplete	
+			1	Unverified	
+			2	Complete	
+					
+Instrument: Eligibility and Program Entry (eligibility_and_program_entry)					
+43	[elig_date]	"Section Header: Program eligibility
+Depending on the program, eligibility determination may occur at the first point of contact or further along in the process.
+Date of eligibility determination"	"text (date_mdy, Max: today), Identifier 
+Custom alignment: LV"		
+44	[eligibility_determined_by]	"Who determined program eligibility?
+Check all that apply"	checkbox		
+			1	eligibility_determined_by___1	Law enforcement
+			2	eligibility_determined_by___2	District attorney
+			3	eligibility_determined_by___3	Defense attorney
+			4	eligibility_determined_by___4	Program coordinator/navigator
+			5	eligibility_determined_by___5	First responder (EMS, Fire)
+			6	eligibility_determined_by___6	Mobile Crisis Team
+			7	eligibility_determined_by___7	Behavioral Health provider
+			8	eligibility_determined_by___8	Peer support worker
+			9	eligibility_determined_by___9	Deflection operations team/work group
+			10	eligibility_determined_by___10	Community corrections staff
+			999	eligibility_determined_by___999	Other {eligibility_determined_by_other}
+			888	eligibility_determined_by___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+45	"[eligibility_determined_by_other]
+Show the field ONLY if: [eligibility_determined_by(999)] = '1'"	Other eligibility determined by	"text, Required
+Custom alignment: LV"		
+46	[charge]	"What charges or potential charges were associated with this deflection event? 
+Check all that apply"	checkbox		
+			1	charge___1	None
+			2	charge___2	PCS (user amounts)
+			3	charge___3	Other misdemeanor
+			4	charge___4	"Violation/citation (e.g. low level ""quality of life"" crime)"
+			5	charge___5	Felony
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=1"		
+47	"[charge_abeyance]
+Show the field ONLY if:
+[charge(2)] = '1' or [charge(3)] = '1' or
+[charge(4)] = '1' or [charge(5)] = '1"	Where deflection charges held in abeyance?	yesno		
+			1	yes	
+			0	no	
+			Custom alignment: LV		
+48	[deflection_qualified]	Did they qualify for the deflection program?	yesno		
+			1	yes	
+			0	no	
+			Custom alignment: LV		
+49	"[disqualified_reason]
+Show the field ONLY if: [deflection_qualified] = '0'"	"Why did they not qualify?
+Check all that apply"	checkbox		
+			1	disqualified_reason___1	Community justice supervision
+			2	disqualified_reason___2	Prior disqualifying conviction
+			3	disqualified_reason___3	Charged with other crime at time of deflection encounter
+			4	disqualified_reason___4	Victim with potential restitution
+			5	disqualified_reason___5	Pending warrant
+			6	disqualified_reason___6	Did not attend court appearance
+			7	disqualified_reason___7	Not a county resident
+			8	disqualified_reason___8	Previous deflection involvement
+			999	disqualified_reason___999	Other {disqualified_reason_other}
+			888	disqualified_reason___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+50	"[disqualified_reason_other]
+Show the field ONLY if: [disqualified_reason(999)] = '1'"	Other disqualified reason	"text, Required 
+Custom alignment: LV"		
+51	"[entered_deflection]
+Show the field ONLY if: [deflection_qualified] = '1'"	Did they agree to enter the deflection program?	yesno		
+			1	Yes	
+			0	No	
+					
+52	"[entered_housing]
+Show the field ONLY if: [entered_deflection] = '1'"	"Section Header: Social determinants of health measures
+Housing situation at time of deflection"	radio		
+			9	Living in a tent	
+			10	Living in a vehicle	
+			8	Outside or other place not meant for habitation	
+			13	Emergency shelter	
+			14	Hotel or motel (paid with emergency shelter voucher)	
+			15	Hotel or motel (without shelter voucher)	
+			4	Transitional housing	
+			16	Safe Haven	
+			17	Staying with family (short-term arrangement)	
+			18	Staying with friends (short-term arrangement)	
+			19	Living with family (long-term or permanent)	
+			20	Living with friends (long-term or permanent)	
+			21	Owns their own home	
+			22	Rental housing (with subsidy)	
+			23	Rental housing (without subsidy)	
+			24	Rental housing (subsidy status unknown)	
+			25	College dorm or student housing	
+			6	Permanent supportive housing	
+			5	Foster care or other group home setting	
+			12	Substance use treatment facility	
+			11	Jail/correctional facility	
+			26	Health, psychiatric, or long-term care facility	
+			999	Other {entered_housing_other}	
+			888	Don't know	
+			"Custom alignment: LV
+Field Annotation: @HIDECHOICE='1,2,3,7'"		
+53	"[entered_housing_other]
+Show the field ONLY if: [entered_housing] = '999'"	Other housing at entry	"text, Required 
+Custom alignment: LV"		
+54	"[entered_stablehousing]
+Show the field ONLY if: [entered_deflection] = '1'"	Is their housing situation stable?	radio		
+			1	Yes	
+			0	No	
+			888	Don't know	
+			Custom alignment: LV		
+55	"[entered_safehousing]
+Show the field ONLY if: [entered_deflection] = '1'"	Is their housing situation safe?	radio		
+			1	Yes	
+			0	No	
+			888	Don't know	
+			Custom alignment: LV		
+56	"[entered_employment]
+Show the field ONLY if: [entered_deflection] = '1'"	"Employment status at time of deflection
+Check all that apply"	checkbox		
+			1	entered_employment___1	Full time employment
+			2	entered_employment___2	Part time employment
+			3	entered_employment___3	Not employed, looking for work
+			4	entered_employment___4	Not employed, not looking for work
+			8	entered_employment___8	Unemployment benefits
+			5	entered_employment___5	Retired
+			6	entered_employment___6	SSI/SSDI
+			7	entered_employment___7	Student
+			999	entered_employment___999	Other {entered_employment_other}
+			888	entered_employment___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+57	"[entered_employment_other]
+Show the field ONLY if: 
+[entered_employment(999)] = '1'"	Other employment at entry	alignment		
+58	"[entered_medicalneeds]
+Show the field ONLY if: [entered_deflection] = '1'"	"Medical needs at time of deflection
+Check all that apply"	checkbox		
+			1	entered_medicalneeds___1	Access to medications/prescriptions
+			2	entered_medicalneeds___2	Emergent treatment (ED/urgent care)
+			3	entered_medicalneeds___3	Chronic condition management
+			5	entered_medicalneeds___5	Access to primary care/basic medical care
+			6	entered_medicalneeds___6	Dental care
+			4	entered_medicalneeds___4	None
+			888	entered_medicalneeds___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='4,888' @HIDECHOICE='999'"		
+60	"[entered_foodinsecurity]
+Show the field ONLY if: [entered_deflection] = '1'"	Food insecurity at time of deflection	radio		
+			3	Currently receiving food assistance	
+			1	Needs access to food assistance	
+			2	Does not need food assistance	
+			888	Don't know	
+			Custom alignment: LV		
+61	"[entered_insurance]
+Show the field ONLY if: [entered_deflection] = '1'"	Insurance status at time of deflection	checkbox		
+			1	entered_insurance___1	Uninsured
+			7	entered_insurance___7	Insured
+			888	entered_insurance___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='1,7,888' 
+@HIDECHOICE='2,3,4,5,6,999'"		
+63	[eligibility_and_program_entry_complete]	"Section Header: Form Status
+Complete?"	Dropdown		
+			0	Incomplete	
+			1	Unverified	
+			2	Complete	
+					
+Instrument: Screenings and Assessments (screenings_and_assessments)					
+64	"[assessment_type]
+Show the field ONLY if: [deflection_qualified] = 1 AND [entere d_deflection] = 1"	"Section Header: Screenings and assessments
+What types of screenings or assessments were administered during this deflection event?
+These choices include both evidence-based and locally developed tools"	checkbox		
+			20	assessment_type___20	ASAM Criteria
+			21	assessment_type___21	Substance use (e.g. DAST-10, AUDIT, ASSIST, CUDIT)
+			22	assessment_type___22	Mental health (e.g. GAD-7, PHQ-9)
+			23	assessment_type___23	Social determinants of health
+			24	assessment_type___24	Physical health
+			18	assessment_type___18	No assessments were administered
+			19	assessment_type___19	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='18,19' @HIDECHOICE='1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17'"		
+65	"[sud_identified]
+Show the field ONLY if: [deflection_qualified] = 1 AND [entere d_deflection] = 1"	"Section Header: Behavioral health diagnoses
+Does the participant have a substance use disorder?"	radio		
+			1	Yes	
+			0	No	
+			888	Don't know	
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+66	"[sud_identified_how]
+Show the field ONLY if: [sud_identified] = '1'"	"How was the substance use disorder identified? 
+Check all that apply"	checkbox		
+			1	sud_identified_how___1	Use of an evidence-based screening or risk tool
+			2	sud_identified_how___2	Self-reported
+			3	sud_identified_how___3	Previously documented
+			4	sud_identified_how___4	Observed by staff
+			5	sud_identified_how___5	Presumed due to receiving treatment
+			999	sud_identified_how___999	Other {other_sud_identified}
+			888	sud_identified_how___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+67	"[other_sud_identified]
+Show the field ONLY if: [sud_identified_how(999)] = '1'"	Other how SUD was identified	"text, Required 
+Custom alignment: LV"		
+68	"[sud_type]
+Show the field ONLY if: [sud_identified] = '1'"	Substance type Check all that apply	checkbox		
+			1	sud_type___1	Alcohol
+			2	sud_type___2	Methamphetamine
+			8	sud_type___8	Cocaine
+			3	sud_type___3	Other amphetamine/stimulant
+			4	sud_type___4	Heroin
+			5	sud_type___5	Fentanyl
+			6	sud_type___6	Other opioids (e.g. morphine, oxycodone)
+			7	sud_type___7	Cannabis
+			9	sud_type___9	Psychedelic/hallucinogen (e.g. psilocybin, DMT, LSD)
+			10	sud_type___10	Benzodiazepines (e.g. Xanax, Valium, Ativan)
+			999	sud_type___999	Other {other_sud_type}
+			888	sud_type___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+69	"[other_sud_type]
+Show the field ONLY if: [sud_type(999)] = '1'"	Other SUD type	"text, Required
+Custom alignment: LV"		
+70	"[mhd_identified]
+Show the field ONLY if: [deflection_qualified] = 1 AND [entere d_deflection] = 1"	Does the participant have a mental health disorder?	radio		
+			1	Yes	
+			0	No	
+			888	Don't know	
+			Custom alignment: LV		
+71	"[mhd_identified_how]
+Show the field ONLY if: [mhd_identified] = '1'"	"How was the mental health disorder identified?
+ Check all that apply"	checkbox		
+			1	mhd_identified_how___1	Use of an evidence-based screening or risk tool
+			2	mhd_identified_how___2	Self-reported
+			3	mhd_identified_how___3	Previously documented
+			4	mhd_identified_how___4	Observed by staff
+			5	mhd_identified_how___5	Presumed due to receiving treatment
+			999	mhd_identified_how___999	Other {mhd_identified_how_other}
+			888	mhd_identified_how___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+72	"[mhd_identified_how_other]
+Show the field ONLY if: 
+[mhd_identified_how(999)] = '1'"	Other how MHD identified	"text, Required
+ Custom alignment: LV"		
+73	"[mhd_diagnosis]
+Show the field ONLY if: [mhd_identified] = '1'"	"Mental health diagnosis 
+Check all that apply"	checkbox		
+			1	mhd_diagnosis___1	Anxiety
+			2	mhd_diagnosis___2	Depression
+			3	mhd_diagnosis___3	Bipolar spectrum disorder
+			4	mhd_diagnosis___4	Other mood disorder
+			5	mhd_diagnosis___5	Personality disorder
+			6	mhd_diagnosis___6	Schizophrenia and other psychotic disorders (not substance-induced)
+			7	mhd_diagnosis___7	Substance-induced psychosis
+			8	mhd_diagnosis___8	Suicidal ideation/attempt/intentional self-harm
+			9	mhd_diagnosis___9	Trauma- and stressor-related disorder (includes PTSD)
+			10	mhd_diagnosis___10	ADD/ADHD
+			999	mhd_diagnosis___999	Other {other_mhd_diagnosis}
+			888	mhd_diagnosis___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+74	"[other_mhd_diagnosis]
+Show the field ONLY if: [mhd_diagnosis(999)] = '1'"	Other MH diagnosis	"text, Required 
+Custom alignment: LV"		
+94	[screenings_and_assessments_complete]	"Section Header: Form Status
+Complete?"	Dropdown		
+			0	Incomplete	
+			1	Unverified	
+			2	Complete	
+					
+Instrument: Referrals and Services (referrals_to_services)					
+95	"[refservice]
+Show the field ONLY if: [deflection_qualified] = 1 AND [entere d_deflection] = 1"	"Section Header: Referrals and services received
+Select types of referrals the participant received
+Check all that apply"	checkbox		
+			1	refservice___1	SUD treatment
+			2	refservice___2	Mental health treatment
+			3	refservice___3	Culturally specific care
+			4	refservice___4	Social and health related services
+			5	refservice___5	None
+			888	refservice___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='5,888' 
+@HIDECHOICE='999'"		
+96	"[inpatient]
+Show the field ONLY if: [refservice(1)] = '1'"	"Section Header: SUD treatment
+Medically managed inpatient"	checkbox		
+			1	inpatient___1	Referred to service
+			2	inpatient___2	Received service
+			3	inpatient___3	Referred but didn't receive
+			4	inpatient___4	Don't know if service was received
+					
+97	"[detox]
+Show the field ONLY if: [refservice(1)] = '1'"	Detox/withdrawal management	checkbox		
+			1	detox___1	Referred to service
+			2	detox___2	Received service
+			3	detox___3	Referred but didn't receive
+			4	detox___4	Don't know if service was received
+					
+98	"[sobering]
+Show the field ONLY if: [refservice(1)] = '1'"	Sobering services	checkbox		
+			1	sobering___1	Referred to service
+			2	sobering___2	Received service
+			3	sobering___3	Referred but didn't receive
+			4	sobering___4	Don't know if service was received
+					
+99	"[res]
+Show the field ONLY if: [refservice(1)] = '1'"	Residential facility	checkbox		
+			1	res___1	Referred to service
+			2	res___2	Received service
+			3	res___3	Referred but didn't receive
+			4	res___4	Don't know if service was received
+					
+100	"[intensive]
+Show the field ONLY if: [refservice(1)] = '1'"	Intensive outpatient	checkbox		
+			1	intensive___1	Referred to service
+			2	intensive___2	Received service
+			3	intensive___3	Referred but didn't receive
+			4	intensive___4	Don't know if service was received
+					
+101	"[outpatient]
+Show the field ONLY if: [refservice(1)] = '1'"	Outpatient	checkbox		
+			1	outpatient___1	Referred to service
+			2	outpatient___2	Received service
+			3	outpatient___3	Referred but didn't receive
+			4	outpatient___4	Don't know if service was received
+					
+102	"[moud]
+Show the field ONLY if: [refservice(1)] = '1'"	Medication for opioid use disorder	checkbox		
+			1	moud___1	Referred to service
+			2	moud___2	Received service
+			3	moud___3	Referred but didn't receive
+			4	moud___4	Don't know if service was received
+					
+103	"[maud]
+Show the field ONLY if: [refservice(1)] = '1'"	Medication for alcohol use disorder	checkbox		
+			1	maud___1	Referred to service
+			2	maud___2	Received service
+			3	maud___3	Referred but didn't receive
+			4	maud___4	Don't know if service was received
+					
+104	"[medstim]
+Show the field ONLY if: [refservice(1)] = '1'"	Medication for stimulant use disorder	checkbox		
+			1	medstim___1	Referred to service
+			2	medstim___2	Received service
+			3	medstim___3	Referred but didn't receive
+			4	medstim___4	Don't know if service was received
+					
+105	"[sudcounsel]
+Show the field ONLY if: [refservice(1)] = '1'"	SUD counseling	checkbox		
+			1	sudcounsel___1	Referred to service
+			2	sudcounsel___2	Received service
+			3	sudcounsel___3	Referred but didn't receive
+			4	sudcounsel___4	Don't know if service was received
+					
+106	"[harmreduc]
+Show the field ONLY if: [refservice(1)] = '1'"	Harm reduction	checkbox		
+			1	harmreduc___1	Referred to service
+			2	harmreduc___2	Received service
+			3	harmreduc___3	Referred but didn't receive
+			4	harmreduc___4	Don't know if service was received
+					
+107	"[recovery]
+Show the field ONLY if: [refservice(1)] = '1'"	Recovery support	checkbox		
+			1	recovery___1	Referred to service
+			2	recovery___2	Received service
+			3	recovery___3	Referred but didn't receive
+			4	recovery___4	Don't know if service was received
+					
+108	"[contin]
+Show the field ONLY if: [refservice(1)] = '1'"	Contingency management	checkbox		
+			1	contin___1	Referred to service
+			2	contin___2	Received service
+			3	contin___3	Referred but didn't receive
+			4	contin___4	Don't know if service was received
+					
+109	"[inpatient_notrecvd_reason]
+Show the field ONLY if: [inpatient(3)] = '1'"	Why did they not receive medically managed inpatient?	checkbox		
+			1	inpatient_notrecvd_reason___1	Service not available in their area
+			2	inpatient_notrecvd_reason___2	Waitlist was too long
+			3	inpatient_notrecvd_reason___3	Declined service
+			4	inpatient_notrecvd_reason___4	CCO refused coverage
+			5	inpatient_notrecvd_reason___5	Change to treatment plan
+			6	inpatient_notrecvd_reason___6	No longer needed
+			7	inpatient_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+110	"[detox_notreceived_reason]
+Show the field ONLY if: [detox(3)] = '1'"	Why did they not receive detox/withdrawal management?	checkbox		
+			1	detox_notreceived_reason___1	Service not available in their area
+			2	detox_notreceived_reason___2	Waitlist was too long
+			3	detox_notreceived_reason___3	Declined service
+			4	detox_notreceived_reason___4	CCO refused coverage
+			5	detox_notreceived_reason___5	Change to treatment plan
+			6	detox_notreceived_reason___6	No longer needed
+			7	detox_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+111	"[sobering_notreceived_reason]
+Show the field ONLY if: [sobering(3)] = '1'"	Why did they not receive sobering services?	checkbox		
+			1	sobering_notreceived_reason___1	Service not available in their area
+			2	sobering_notreceived_reason___2	Waitlist was too long
+			3	sobering_notreceived_reason___3	Declined service
+			4	sobering_notreceived_reason___4	CCO refused coverage
+			5	sobering_notreceived_reason___5	Change to treatment plan
+			6	sobering_notreceived_reason___6	No longer needed
+			7	sobering_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+112	"[res_notrecvd_reason]
+Show the field ONLY if: [res(3)] = '1'"	Why did they not receive residential facility treatment?	checkbox		
+			1	res_notrecvd_reason___1	Service not available in their area
+			2	res_notrecvd_reason___2	Waitlist was too long
+			3	res_notrecvd_reason___3	Declined service
+			4	res_notrecvd_reason___4	CCO refused coverage
+			5	res_notrecvd_reason___5	Change to treatment plan
+			6	res_notrecvd_reason___6	No longer needed
+			7	res_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+113	"[intensive_notrecvd_reason]
+Show the field ONLY if: [intensive(3)] = '1'"	Why did they not receive intensive outpatient treatment?	checkbox		
+			1	intensive_notrecvd_reason___1	Service not available in their area
+			2	intensive_notrecvd_reason___2	Waitlist was too long
+			3	intensive_notrecvd_reason___3	Declined service
+			4	intensive_notrecvd_reason___4	CCO refused coverage
+			5	intensive_notrecvd_reason___5	Change to treatment plan
+			6	intensive_notrecvd_reason___6	No longer needed
+			7	intensive_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+114	"[outpatient_notrecvd_reason]
+Show the field ONLY if: [outpatient(3)] = '1'"	Why did they not receive outpatient treatment?	checkbox		
+			1	outpatient_notrecvd_reason___1	Service not available in their area
+			2	outpatient_notrecvd_reason___2	Waitlist was too long
+			3	outpatient_notrecvd_reason___3	Declined service
+			4	outpatient_notrecvd_reason___4	CCO refused coverage
+			5	outpatient_notrecvd_reason___5	Change to treatment plan
+			6	outpatient_notrecvd_reason___6	No longer needed
+			7	outpatient_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+115	"[moud_notreceived_reason]
+Show the field ONLY if: [moud(3)] = '1'"	Why did they not receive medication for opioid use disorder?	checkbox		
+			1	moud_notreceived_reason___1	Service not available in their area
+			2	moud_notreceived_reason___2	Waitlist was too long
+			3	moud_notreceived_reason___3	Declined service
+			4	moud_notreceived_reason___4	CCO refused coverage
+			5	moud_notreceived_reason___5	Change to treatment plan
+			6	moud_notreceived_reason___6	No longer needed
+			7	moud_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+116	"[maud_notreceived_reason]
+Show the field ONLY if: [maud(3)] = '1'"	Why did they not receive medication for alcohol use disorder?	checkbox		
+			1	maud_notreceived_reason___1	Service not available in their area
+			2	maud_notreceived_reason___2	Waitlist was too long
+			3	maud_notreceived_reason___3	Declined service
+			4	maud_notreceived_reason___4	CCO refused coverage
+			5	maud_notreceived_reason___5	Change to treatment plan
+			6	maud_notreceived_reason___6	No longer needed
+			7	maud_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+117	"[medstim_notreceived_reason]
+Show the field ONLY if: [medstim(3)] = '1'"	Why did they not receive medication for stimulant use disorder?	checkbox		
+			1	medstim_notreceived_reason___1	Service not available in their area
+			2	medstim_notreceived_reason___2	Waitlist was too long
+			3	medstim_notreceived_reason___3	Declined service
+			4	medstim_notreceived_reason___4	CCO refused coverage
+			5	medstim_notreceived_reason___5	Change to treatment plan
+			6	medstim_notreceived_reason___6	No longer needed
+			7	medstim_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+118	"[sudcounsel_notrecvd_reason]
+Show the field ONLY if: [sudcounsel(3)] = '1'"	Why did they not receive SUD counseling?	checkbox		
+			1	sudcounsel_notrecvd_reason___1	Service not available in their area
+			2	sudcounsel_notrecvd_reason___2	Waitlist was too long
+			3	sudcounsel_notrecvd_reason___3	Declined service
+			4	sudcounsel_notrecvd_reason___4	CCO refused coverage
+			5	sudcounsel_notrecvd_reason___5	Change to treatment plan
+			6	sudcounsel_notrecvd_reason___6	No longer needed
+			7	sudcounsel_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+119	"[harmreduc_notrecvd_reason]
+Show the field ONLY if: [harmreduc(3)] = '1'"	Why did they not receive harm reduction?	checkbox		
+			1	harmreduc_notrecvd_reason___1	Service not available in their area
+			2	harmreduc_notrecvd_reason___2	Waitlist was too long
+			3	harmreduc_notrecvd_reason___3	Declined service
+			4	harmreduc_notrecvd_reason___4	CCO refused coverage
+			5	harmreduc_notrecvd_reason___5	Change to treatment plan
+			6	harmreduc_notrecvd_reason___6	No longer needed
+			7	harmreduc_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+120	"[recovery_notrecvd_reason]
+Show the field ONLY if: [recovery(3)] = '1'"	Why did they not receive recovery support?	checkbox		
+			1	recovery_notrecvd_reason___1	Service not available in their area
+			2	recovery_notrecvd_reason___2	Waitlist was too long
+			3	recovery_notrecvd_reason___3	Declined service
+			4	recovery_notrecvd_reason___4	CCO refused coverage
+			5	recovery_notrecvd_reason___5	Change to treatment plan
+			6	recovery_notrecvd_reason___6	No longer needed
+			7	recovery_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+121	"[contin_notrecvd_reason]
+Show the field ONLY if: [contin(3)] = '1'"	Why did they not receive contingency management?	checkbox		
+			1	contin_notrecvd_reason___1	Service not available in their area
+			2	contin_notrecvd_reason___2	Waitlist was too long
+			3	contin_notrecvd_reason___3	Declined service
+			4	contin_notrecvd_reason___4	CCO refused coverage
+			5	contin_notrecvd_reason___5	Change to treatment plan
+			6	contin_notrecvd_reason___6	No longer needed
+			7	contin_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+122	"[psychother]
+Show the field ONLY if: [refservice(2)] = '1'"	"Section Header: Mental health treatment
+Psychotherapy"	checkbox		
+			1	psychother___1	Referred to service
+			2	psychother___2	Received service
+			3	psychother___3	Referred but didn't receive
+			4	psychother___4	Don't know if service was received
+					
+123	"[mhmed]
+Show the field ONLY if: [refservice(2)] = '1'"	Mental health medication	checkbox		
+			1	mhmed___1	Referred to service
+			2	mhmed___2	Received service
+			3	mhmed___3	Referred but didn't receive
+			4	mhmed___4	Don't know if service was received
+					
+124	"[hospital]
+Show the field ONLY if: [refservice(2)] = '1'"	Hospitalization	checkbox		
+			1	hospital___1	Referred to service
+			2	hospital___2	Received service
+			3	hospital___3	Referred but didn't receive
+			4	hospital___4	Don't know if service was received
+					
+125	"[mhcounsel]
+Show the field ONLY if: [refservice(2)] = '1'"	Mental health counseling	checkbox		
+			1	mhcounsel___1	Referred to service
+			2	mhcounsel___2	Received service
+			3	mhcounsel___3	Referred but didn't receive
+			4	mhcounsel___4	Don't know if service was received
+					
+126	"[grptherapy]
+Show the field ONLY if: [refservice(2)] = '1'"	Group therapy	checkbox		
+			1	grptherapy___1	Referred to service
+			2	grptherapy___2	Received service
+			3	grptherapy___3	Referred but didn't receive
+			4	grptherapy___4	Don't know if service was received
+					
+127	"[psychother_notrecvd_reason]
+Show the field ONLY if: [psychother(3)] = '1'"	Why did they not receive psychotherapy?	checkbox		
+			1	psychother_notrecvd_reason___1	Service not available in their area
+			2	psychother_notrecvd_reason___2	Waitlist was too long
+			3	psychother_notrecvd_reason___3	Declined service
+			4	psychother_notrecvd_reason___4	CCO refused coverage
+			5	psychother_notrecvd_reason___5	Change to treatment plan
+			6	psychother_notrecvd_reason___6	No longer needed
+			7	psychother_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+128	"[mhmed_notrecvd_reason]
+Show the field ONLY if: [mhmed(3)] = '1'"	Why did they not receive mental health medication?	checkbox		
+			1	mhmed_notrecvd_reason___1	Service not available in their area
+			2	mhmed_notrecvd_reason___2	Waitlist was too long
+			3	mhmed_notrecvd_reason___3	Declined service
+			4	mhmed_notrecvd_reason___4	CCO refused coverage
+			5	mhmed_notrecvd_reason___5	Change to treatment plan
+			6	mhmed_notrecvd_reason___6	No longer needed
+			7	mhmed_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+129	"[hospital_notrecvd_reason]
+Show the field ONLY if: [hospital(3)] = '1'"	Why did they not receive hospitalization?	checkbox		
+			1	hospital_notrecvd_reason___1	Service not available in their area
+			2	hospital_notrecvd_reason___2	Waitlist was too long
+			3	hospital_notrecvd_reason___3	Declined service
+			4	hospital_notrecvd_reason___4	CCO refused coverage
+			5	hospital_notrecvd_reason___5	Change to treatment plan
+			6	hospital_notrecvd_reason___6	No longer needed
+			7	hospital_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+130	"[mhcounsel_notrecvd_reason]
+Show the field ONLY if: [mhcounsel(3)] = '1'"	Why did they not receive mental health counseling?	checkbox		
+			1	mhcounsel_notrecvd_reason___1	Service not available in their area
+			2	mhcounsel_notrecvd_reason___2	Waitlist was too long
+			3	mhcounsel_notrecvd_reason___3	Declined service
+			4	mhcounsel_notrecvd_reason___4	CCO refused coverage
+			5	mhcounsel_notrecvd_reason___5	Change to treatment plan
+			6	mhcounsel_notrecvd_reason___6	No longer needed
+			7	mhcounsel_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+131	"[grptherpay_notrecvd_reason]
+Show the field ONLY if: [grptherapy(3)] = '1'"	Why did they not receive group therapy?	checkbox		
+			1	grptherpay_notrecvd_reason___1	Service not available in their area
+			2	grptherpay_notrecvd_reason___2	Waitlist was too long
+			3	grptherpay_notrecvd_reason___3	Declined service
+			4	grptherpay_notrecvd_reason___4	CCO refused coverage
+			5	grptherpay_notrecvd_reason___5	Change to treatment plan
+			6	grptherpay_notrecvd_reason___6	No longer needed
+			7	grptherpay_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+132	"[interp]
+Show the field ONLY if: [refservice(3)] = '1'"	"Section Header: Culturally responsive care
+Interpreter services"	checkbox		
+			1	interp___1	Referred to service
+			2	interp___2	Received service
+			3	interp___3	Referred but didn't receive
+			4	interp___4	Don't know if service was received
+					
+133	"[translat]
+Show the field ONLY if: [refservice(3)] = '1'"	Translated printed materials	checkbox		
+			1	translat___1	Referred to service
+			2	translat___2	Received service
+			3	translat___3	Referred but didn't receive
+			4	translat___4	Don't know if service was received
+					
+134	"[concord]
+Show the field ONLY if: [refservice(3)] = '1'"	Language concordant care	checkbox		
+			1	concord___1	Referred to service
+			2	concord___2	Received service
+			3	concord___3	Referred but didn't receive
+			4	concord___4	Don't know if service was received
+					
+135	"[culture]
+Show the field ONLY if: [refservice(3)] = '1'"	Culturally and linguistically specific services	checkbox		
+			1	culture___1	Referred to service
+			2	culture___2	Received service
+			3	culture___3	Referred but didn't receive
+			4	culture___4	Don't know if service was received
+					
+136	"[interp_notreceived_reason]
+Show the field ONLY if: [interp(3)] = '1'"	Why did they not receive interpreter services?	checkbox		
+			1	interp_notreceived_reason___1	Service not available in their area
+			2	interp_notreceived_reason___2	Waitlist was too long
+			3	interp_notreceived_reason___3	Declined service
+			4	interp_notreceived_reason___4	CCO refused coverage
+			5	interp_notreceived_reason___5	Change to treatment plan
+			6	interp_notreceived_reason___6	No longer needed
+			7	interp_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+137	"[translat_notrecvd_reason]
+Show the field ONLY if: [translat(3)] = '1'"	Why did they not receive translated printed materials?	checkbox		
+			1	translat_notrecvd_reason___1	Service not available in their area
+			2	translat_notrecvd_reason___2	Waitlist was too long
+			3	translat_notrecvd_reason___3	Declined service
+			4	translat_notrecvd_reason___4	CCO refused coverage
+			5	translat_notrecvd_reason___5	Change to treatment plan
+			6	translat_notrecvd_reason___6	No longer needed
+			7	translat_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+138	"[concord_notrecvd_reason]
+Show the field ONLY if: [concord(3)] = '1'"	Why did they not receive language concordant care?	checkbox		
+			1	concord_notrecvd_reason___1	Service not available in their area
+			2	concord_notrecvd_reason___2	Waitlist was too long
+			3	concord_notrecvd_reason___3	Declined service
+			4	concord_notrecvd_reason___4	CCO refused coverage
+			5	concord_notrecvd_reason___5	Change to treatment plan
+			6	concord_notrecvd_reason___6	No longer needed
+			7	concord_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+139	"[culture_notreceived_reason]
+Show the field ONLY if: [culture(3)] = '1'"	Why did they not receive culturally and linguistically specific services?	checkbox		
+			1	culture_notreceived_reason___1	Service not available in their area
+			2	culture_notreceived_reason___2	Waitlist was too long
+			3	culture_notreceived_reason___3	Declined service
+			4	culture_notreceived_reason___4	CCO refused coverage
+			5	culture_notreceived_reason___5	Change to treatment plan
+			6	culture_notreceived_reason___6	No longer needed
+			7	culture_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+140	"[housing]
+Show the field ONLY if: [refservice(4)] = '1'"	"Section Header: Social and health related services
+Housing supports"	checkbox		
+			1	housing___1	Referred to service
+			2	housing___2	Received service
+			3	housing___3	Referred but didn't receive
+			4	housing___4	Don't know if service was received
+					
+141	"[employment]
+Show the field ONLY if: [refservice(4)] = '1'"	Employment supports	checkbox		
+			1	employment___1	Referred to service
+			2	employment___2	Received service
+			3	employment___3	Referred but didn't receive
+			4	employment___4	Don't know if service was received
+					
+142	"[ssi]
+Show the field ONLY if: [refservice(4)] = '1'"	Financial supports (e.g. SSI/SSDI)	checkbox		
+			1	ssi___1	Referred to service
+			2	ssi___2	Received service
+			3	ssi___3	Referred but didn't receive
+			4	ssi___4	Don't know if service was received
+					
+143	"[ohp]
+Show the field ONLY if: [refservice(4)] = '1'"	OHP enrollment	checkbox		
+			1	ohp___1	Referred to service
+			2	ohp___2	Received service
+			3	ohp___3	Referred but didn't receive
+			4	ohp___4	Don't know if service was received
+					
+144	"[snap]
+Show the field ONLY if: [refservice(4)] = '1'"	SNAP enrollment (or other food assistance)	checkbox		
+			1	snap___1	Referred to service
+			2	snap___2	Received service
+			3	snap___3	Referred but didn't receive
+			4	snap___4	Don't know if service was received
+					
+145	"[tanf]
+Show the field ONLY if: [refservice(4)] = '1'"	TANF enrollment	checkbox		
+			1	tanf___1	Referred to service
+			2	tanf___2	Received service
+			3	tanf___3	Referred but didn't receive
+			4	tanf___4	Don't know if service was received
+					
+146	"[pcp]
+Show the field ONLY if: [refservice(4)] = '1'"	Primary care	checkbox		
+			1	pcp___1	Referred to service
+			2	pcp___2	Received service
+			3	pcp___3	Referred but didn't receive
+			4	pcp___4	Don't know if service was received
+					
+147	"[dental]
+Show the field ONLY if: [refservice(4)] = '1'"	Dental care	checkbox		
+			1	dental___1	Referred to service
+			2	dental___2	Received service
+			3	dental___3	Referred but didn't receive
+			4	dental___4	Don't know if service was received
+					
+148	"[case_mgmt]
+Show the field ONLY if: [refservice(4)] = '1'"	Intensive case management	checkbox		
+			1	case_mgmt___1	Referred to service
+			2	case_mgmt___2	Received service
+			3	case_mgmt___3	Referred but didn't receive
+			4	case_mgmt___4	Don't know if service was received
+					
+149	"[transport]
+Show the field ONLY if: [refservice(4)] = '1'"	Transportation	checkbox		
+			1	transport___1	Referred to service
+			2	transport___2	Received service
+			3	transport___3	Referred but didn't receive
+			4	transport___4	Don't know if service was received
+					
+150	"[phone]
+Show the field ONLY if: [refservice(4)] = '1'"	Cell phone	checkbox		
+			1	phone___1	Referred to service
+			2	phone___2	Received service
+			3	phone___3	Referred but didn't receive
+			4	phone___4	Don't know if service was received
+					
+151	"[basic_needs]
+Show the field ONLY if: [refservice(4)] = '1'"	Basic needs (e.g. clothing, hygiene products)	checkbox		
+			1	basic_needs___1	Referred to service
+			2	basic_needs___2	Received service
+			3	basic_needs___3	Referred but didn't receive
+			4	basic_needs___4	Don't know if service was received
+					
+152	"[legal]
+Show the field ONLY if: [refservice(4)] = '1'"	Legal assistance	checkbox		
+			1	legal___1	Referred to service
+			2	legal___2	Received service
+			3	legal___3	Referred but didn't receive
+			4	legal___4	Don't know if service was received
+					
+153	"[license]
+Show the field ONLY if: [refservice(4)] = '1'"	ID/Driver's license	checkbox		
+			1	license___1	Referred to service
+			2	license___2	Received service
+			3	license___3	Referred but didn't receive
+			4	license___4	Don't know if service was received
+					
+154	"[vet_serv]
+Show the field ONLY if: [refservice(4)] = '1'"	Veteran's services	checkbox		
+			1	vet_serv___1	Referred to service
+			2	vet_serv___2	Received service
+			3	vet_serv___3	Referred but didn't receive
+			4	vet_serv___4	Don't know if service was received
+					
+155	"[family]
+Show the field ONLY if: [refservice(4)] = '1'"	Family services	checkbox		
+			1	family___1	Referred to service
+			2	family___2	Received service
+			3	family___3	Referred but didn't receive
+			4	family___4	Don't know if service was received
+					
+156	"[other_serv]
+Show the field ONLY if: [refservice(4)] = '1'"	Other service	checkbox		
+			1	other_serv___1	Referred to service
+			2	other_serv___2	Received service
+			3	other_serv___3	Referred but didn't receive
+			4	other_serv___4	Don't know if service was received
+					
+157	"[other_serv_type]
+Show the field ONLY if: [other_serv(1)] = '1'"	Other service type	text, Required		
+158	"[housing_notreceived_reason]
+Show the field ONLY if: [housing(3)] = '1'"	Why did they not receive housing supports?	checkbox		
+			1	housing_notreceived_reason___1	Service not available in their area
+			2	housing_notreceived_reason___2	Waitlist was too long
+			3	housing_notreceived_reason___3	Declined service
+			4	housing_notreceived_reason___4	CCO refused coverage
+			5	housing_notreceived_reason___5	Change to treatment plan
+			6	housing_notreceived_reason___6	No longer needed
+			7	housing_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+159	"[employment_notrecvd_reason]
+Show the field ONLY if: [employment(3)] = '1'"	Why did they not receive employment supports?	checkbox		
+			1	employment_notrecvd_reason___1	Service not available in their area
+			2	employment_notrecvd_reason___2	Waitlist was too long
+			3	employment_notrecvd_reason___3	Declined service
+			4	employment_notrecvd_reason___4	CCO refused coverage
+			5	employment_notrecvd_reason___5	Change to treatment plan
+			6	employment_notrecvd_reason___6	No longer needed
+			7	employment_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+160	"[ssi_notrecvd_reason]
+Show the field ONLY if: [ssi(3)] = '1'"	Why did they not receive financial supports?	checkbox		
+			1	ssi_notrecvd_reason___1	Service not available in their area
+			2	ssi_notrecvd_reason___2	Waitlist was too long
+			3	ssi_notrecvd_reason___3	Declined service
+			4	ssi_notrecvd_reason___4	CCO refused coverage
+			5	ssi_notrecvd_reason___5	Change to treatment plan
+			6	ssi_notrecvd_reason___6	No longer needed
+			7	ssi_notrecvd_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+161	"[ohp_notreceived_reason]
+Show the field ONLY if: [ohp(3)] = '1'"	Why did they not receive OHP enrollment?	checkbox		
+			1	ohp_notreceived_reason___1	Service not available in their area
+			2	ohp_notreceived_reason___2	Waitlist was too long
+			3	ohp_notreceived_reason___3	Declined service
+			4	ohp_notreceived_reason___4	CCO refused coverage
+			5	ohp_notreceived_reason___5	Change to treatment plan
+			6	ohp_notreceived_reason___6	No longer needed
+			7	ohp_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+162	"[snap_notreceived_reason]
+Show the field ONLY if: [snap(3)] = '1'"	Why did they not receive SNAP enrollment?	checkbox		
+			1	snap_notreceived_reason___1	Service not available in their area
+			2	snap_notreceived_reason___2	Waitlist was too long
+			3	snap_notreceived_reason___3	Declined service
+			4	snap_notreceived_reason___4	CCO refused coverage
+			5	snap_notreceived_reason___5	Change to treatment plan
+			6	snap_notreceived_reason___6	No longer needed
+			7	snap_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+163	"[tanf_notreceived_reason]
+Show the field ONLY if: [tanf(3)] = '1'"	Why did they not receive TANF enrollment?	checkbox		
+			1	tanf_notreceived_reason___1	Service not available in their area
+			2	tanf_notreceived_reason___2	Waitlist was too long
+			3	tanf_notreceived_reason___3	Declined service
+			4	tanf_notreceived_reason___4	CCO refused coverage
+			5	tanf_notreceived_reason___5	Change to treatment plan
+			6	tanf_notreceived_reason___6	No longer needed
+			7	tanf_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+164	"[pcp_notreceived_reason]
+Show the field ONLY if: [pcp(3)] = '1'"	Why did they not receive primary care?	checkbox		
+			1	pcp_notreceived_reason___1	Service not available in their area
+			2	pcp_notreceived_reason___2	Waitlist was too long
+			3	pcp_notreceived_reason___3	Declined service
+			4	pcp_notreceived_reason___4	CCO refused coverage
+			5	pcp_notreceived_reason___5	Change to treatment plan
+			6	pcp_notreceived_reason___6	No longer needed
+			7	pcp_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+165	"[dental_notreceived_reason]
+Show the field ONLY if: [dental(3)] = '1'"	Why did they not receive dental care?	checkbox		
+			1	dental_notreceived_reason___1	Service not available in their area
+			2	dental_notreceived_reason___2	Waitlist was too long
+			3	dental_notreceived_reason___3	Declined service
+			4	dental_notreceived_reason___4	CCO refused coverage
+			5	dental_notreceived_reason___5	Change to treatment plan
+			6	dental_notreceived_reason___6	No longer needed
+			7	dental_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+166	"[case_mgmt_notreceived_reason]
+Show the field ONLY if: [case_mgmt(3)] = '1'"	Why did they not receive intensive case management?	checkbox		
+			1	case_mgmt_notreceived_reason___1	Service not available in their area
+			2	case_mgmt_notreceived_reason___2	Waitlist was too long
+			3	case_mgmt_notreceived_reason___3	Declined service
+			4	case_mgmt_notreceived_reason___4	CCO refused coverage
+			5	case_mgmt_notreceived_reason___5	Change to treatment plan
+			6	case_mgmt_notreceived_reason___6	No longer needed
+			7	case_mgmt_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+167	"[transport_notreceived_reason]
+Show the field ONLY if: [transport(3)] = '1'"	Why did they not receive transportation?	checkbox		
+			1	transport_notreceived_reason___1	Service not available in their area
+			2	transport_notreceived_reason___2	Waitlist was too long
+			3	transport_notreceived_reason___3	Declined service
+			4	transport_notreceived_reason___4	CCO refused coverage
+			5	transport_notreceived_reason___5	Change to treatment plan
+			6	transport_notreceived_reason___6	No longer needed
+			7	transport_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+168	"[phone_notreceived_reason]
+Show the field ONLY if: [phone(3)] = '1'"	Why did they not receive a cell phone?	checkbox		
+			1	phone_notreceived_reason___1	Service not available in their area
+			2	phone_notreceived_reason___2	Waitlist was too long
+			3	phone_notreceived_reason___3	Declined service
+			4	phone_notreceived_reason___4	CCO refused coverage
+			5	phone_notreceived_reason___5	Change to treatment plan
+			6	phone_notreceived_reason___6	No longer needed
+			7	phone_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+169	"[basic_needs_notreceived_reason]
+Show the field ONLY if: [basic_needs(3)] = '1'"	Why did they not receive basic needs?	checkbox		
+			1	basic_needs_notreceived_reason___1	Service not available in their area
+			2	basic_needs_notreceived_reason___2	Waitlist was too long
+			3	basic_needs_notreceived_reason___3	Declined service
+			4	basic_needs_notreceived_reason___4	CCO refused coverage
+			5	basic_needs_notreceived_reason___5	Change to treatment plan
+			6	basic_needs_notreceived_reason___6	No longer needed
+			7	basic_needs_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+170	"[legal_notreceived_reason]
+Show the field ONLY if: [legal(3)] = '1'"	Why did they not receive legal assistance?	checkbox		
+			1	legal_notreceived_reason___1	Service not available in their area
+			2	legal_notreceived_reason___2	Waitlist was too long
+			3	legal_notreceived_reason___3	Declined service
+			4	legal_notreceived_reason___4	CCO refused coverage
+			5	legal_notreceived_reason___5	Change to treatment plan
+			6	legal_notreceived_reason___6	No longer needed
+			7	legal_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+171	"[license_notreceived_reason]
+Show the field ONLY if: [license(3)] = '1'"	Why did they not receive an ID/Driver's license?	checkbox		
+			1	license_notreceived_reason___1	Service not available in their area
+			2	license_notreceived_reason___2	Waitlist was too long
+			3	license_notreceived_reason___3	Declined service
+			4	license_notreceived_reason___4	CCO refused coverage
+			5	license_notreceived_reason___5	Change to treatment plan
+			6	license_notreceived_reason___6	No longer needed
+			7	license_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+172	"[vet_serv_notreceived_reason]
+Show the field ONLY if: [vet_serv(3)] = '1'"	Why did they not receive veteran's services?	checkbox		
+			1	vet_serv_notreceived_reason___1	Service not available in their area
+			2	vet_serv_notreceived_reason___2	Waitlist was too long
+			3	vet_serv_notreceived_reason___3	Declined service
+			4	vet_serv_notreceived_reason___4	CCO refused coverage
+			5	vet_serv_notreceived_reason___5	Change to treatment plan
+			6	vet_serv_notreceived_reason___6	No longer needed
+			7	vet_serv_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+173	"[family_notreceived_reason]
+Show the field ONLY if: [family(3)] = '1'"	Why did they not receive family services?	checkbox		
+			1	family_notreceived_reason___1	Service not available in their area
+			2	family_notreceived_reason___2	Waitlist was too long
+			3	family_notreceived_reason___3	Declined service
+			4	family_notreceived_reason___4	CCO refused coverage
+			5	family_notreceived_reason___5	Change to treatment plan
+			6	family_notreceived_reason___6	No longer needed
+			7	family_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+174	"[other_notreceived_reason]
+Show the field ONLY if: [other_serv(3)] = '1'"	Why did they not receive [other_serv_type]?	checkbox		
+			1	other_notreceived_reason___1	Service not available in their area
+			2	other_notreceived_reason___2	Waitlist was too long
+			3	other_notreceived_reason___3	Declined service
+			4	other_notreceived_reason___4	CCO refused coverage
+			5	other_notreceived_reason___5	Change to treatment plan
+			6	other_notreceived_reason___6	No longer needed
+			7	other_notreceived_reason___7	Lost to follow up/unable to contact
+			Custom alignment: LV		
+190	[referrals_to_services_complete]	"Section Header: Form Status
+Complete?"	dropdown		
+			0	Incomplete	
+			1	Unverified	
+			2	Complete	
+					
+Instrument: Deflection Completion (deflection_completion)					
+191	"[completed_deflection]
+Show the field ONLY if: [deflection_qualified] = 1 AND [entere d_deflection] = 1"	"Section Header: Program completion
+Did the participant complete the program or move to alumni status?"	yesno		
+			1	Yes	
+			0	No	
+			Custom alignment: LV		
+192	"[completion_date]
+Show the field ONLY if: [completed_deflection] = '1'"	Date of completion or alumni status	"text (date_mdy, Max: today), Identifier 
+Custom alignment: LV"		
+193	"[left_program_date]
+Show the field ONLY if: [completed_deflection] = '0'"	Date they left program	"text (date_mdy, Max: today), Identifier 
+Custom alignment: LV"		
+194	"[incompleted_reason]
+Show the field ONLY if: [completed_deflection] = '0'"	"Why did they not complete deflection?
+Check all that apply"	checkbox		
+			1	incompleted_reason___1	Lost to follow-up/unable to contact
+			2	incompleted_reason___2	New criminal justice involvement
+			3	incompleted_reason___3	Did not engage with treatment plan
+			4	incompleted_reason___4	Declined housing support
+			5	incompleted_reason___5	Voluntarily left program
+			6	incompleted_reason___6	Substance use
+			9	incompleted_reason___9	Needs a higher level of care
+			7	incompleted_reason___7	Overdose death
+			8	incompleted_reason___8	Other cause of death
+			999	incompleted_reason___999	Other {incompleted_reason_other}
+			888	incompleted_reason 888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE=888"		
+195	"[incompleted_reason_other]
+Show the field ONLY if: [incompleted_reason(999)] = '1'"	Other reason for not completing	"text, Required 
+Custom alignment: LV"		
+196	"[engagement]
+Show the field ONLY if: [completed_deflection] = '0'"	Did the participant ever engage with deflection staff?	radio		
+			1	Yes	
+			0	No	
+			888	Don't know	
+			Custom alignment: LV		
+197	"[deflection_plan]
+Show the field ONLY if: [completed_deflection] = '0'"	Was an individualized deflection plan developed for the participant?	radio		
+			1	Yes	
+			0	No	
+			888	Don't know	
+			Custom alignment: LV		
+198	"[improvement]
+Show the field ONLY if: [completed_deflection] = '0'"	"Was there significant improvement in any of the following areas?
+Only include things that occurred as a direct result of engagement with the deflection program"	checkbox		
+			1	improvement___1	Reduction in substance use
+			2	improvement___2	Homelessness or housing stability
+			3	improvement___3	Employment status
+			4	improvement___4	General quality of life
+			5	improvement___5	Social relationships
+			6	improvement___6	Addressing medical needs
+			7	improvement___7	Mental health
+			8	improvement___8	No improvements
+			888	improvement___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='888'"		
+199	"[incompleted_cjs]
+Show the field ONLY if: [completed_deflection] = '0'"	What was their criminal justice status after not completing program?	radio		
+			1	Conditional discharge	
+			5	Conditional release	
+			2	Community supervision	
+			6	Case referred to DA's office	
+			7	Charges filed	
+			8	Warrant issued	
+			3	Jail	
+			4	Other county programming	
+			9	Social referral - No charges associated with event	
+			999	Other {incompleted_cjs_other}	
+			888	Don't know	
+			Custom alignment: LV		
+200	"[incompleted_cjs_other]
+Show the field ONLY if: [incompleted_cjs] = '999'"	Other incomplete CJS	"text, Required 
+Custom alignment: LV"		
+201	"[completion_criteria]
+Show the field ONLY if: [completed_deflection] = '1'"	"What criteria qualified them for completion?
+Check all that apply"	checkbox		
+			1	completion_criteria___1	Accessed recommended services within specified time period
+			2	completion_criteria___2	Completed an SUD assessment
+			3	completion_criteria___3	Completed treatment recommendations/goals
+			4	completion_criteria___4	Continued engagement with treatment plan
+			18	completion_criteria___18	Engaged with treatment plan for required period of time
+			17	completion_criteria___17	Negative UA
+			7	completion_criteria___7	Reduction in substance use
+			8	completion_criteria___8	Increased harm reduction
+			9	completion_criteria___9	Engagement with case manager
+			10	completion_criteria___10	Improvement in homelessness
+			11	completion_criteria___11	Improvement in employment status
+			12	completion_criteria___12	Improvement in quality of life
+			13	completion_criteria___13	Reduction in Hospital/ED visits
+			14	completion_criteria___14	Reduction in recidivism
+			15	completion_criteria___15	No new criminal activity
+			16	completion_criteria___16	Completion of community service/restitution repayment
+			999	completion_criteria___999	Other {completion_criteria_other}
+			"Custom alignment: LV
+Field Annotation: @HIDECHOICE='5,6'"		
+202	"[completion_criteria_other]
+Show the field ONLY if: [completion_criteria(999)] = '1'"	Other completion criteria	"text, Required 
+Custom alignment: LV"		
+203	"[completed_cjsoutcome]
+Show the field ONLY if: [completed_deflection] = '1'"	Disposition of deflection charges	radio		
+			1	No charge(s) filed with DA	
+			2	Charge(s) dismissed	
+			4	Social referral - no charges associated with event	
+			999	Other {completed_cjsoutcome_other}	
+			888	Don't know	
+			Custom alignment: LV		
+204	"[completed_cjsoutcome_other]
+Show the field ONLY if: [completed_cjsoutcome] = '999'"	Other completed CJS outcome	text, Required Custom alignment: LV		
+206	"[completed_housing]
+Show the field ONLY if: [completed_deflection] = '1'"	Housing situation at program completion	radio		
+			9	Living in a tent	
+			10	Living in a vehicle	
+			8	Outside or other place not meant for habitation	
+			13	Emergency shelter	
+			14	Hotel or motel (paid with emergency shelter voucher)	
+			15	Hotel or motel (without shelter voucher)	
+			4	Transitional housing	
+			16	Safe Haven	
+			17	Staying with family (short-term arrangement)	
+			18	Staying with friends (short-term arrangement)	
+			19	Living with family (long-term or permanent)	
+			20	Living with friends (long-term or permanent)	
+			21	Owns their own home	
+			22	Rental housing (with subsidy)	
+			23	Rental housing (without subsidy)	
+			24	Rental housing (subsidy status unknown)	
+			25	College dorm or student housing	
+			6	Permanent supportive housing	
+			5	Foster care or other group home setting	
+			12	Substance use treatment facility	
+			11	Jail/correctional facility	
+			26	Health, psychiatric, or long-term care facility	
+			999	Other {completed_housing_other}	
+			888	Don't know	
+			"Custom alignment: LV
+Field Annotation: @HIDECHOICE='1,2,3,7'"		
+207	"[completed_housing_other]
+Show the field ONLY if: [completed_housing] = '999'"	Other housing at completion	text, Required Custom alignment: LV		
+208	"[completed_stablehousing]
+Show the field ONLY if: [completed_deflection] = '1'"	Is their housing situation stable?	radio		
+			1	Yes	
+			0	No	
+			888	Don't know	
+			Custom alignment: LV		
+209	"[completed_safehousing]
+Show the field ONLY if: [completed_deflection] = '1'"	Is their housing situation safe?	radio		
+			1	Yes	
+			0	No	
+			888	Don't know	
+			Custom alignment: LV		
+210	"[completed_employment]
+Show the field ONLY if: [completed_deflection] = '1'"	"Employment status at program completion
+Check all that apply"	checkbox		
+			1	completed_employment___1	Full time employment
+			2	completed_employment___2	Part time employment
+			3	completed_employment___3	Not employed, looking for work
+			4	completed_employment___4	Not employed, not looking for work
+			8	completed_employment___8	Unemployment benefits
+			5	completed_employment___5	Retired
+			6	completed_employment___6	SSI/SSDI
+			7	completed_employment___7	Student
+			999	completed_employment___999	Other {completed_employment_other}
+			888	completed_employment___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='888'"		
+211	"[completed_employment_other]
+Show the field ONLY if: [completed_employment(999)] = '1'"	Other employment at completion	text, Required Custom alignment: LV		
+212	"[completed_medneeds]
+Show the field ONLY if: [completed_deflection] = '1'"	"Medical needs at program completion
+Check all that apply"	checkbox		
+			1	completed_medneeds___1	Access to medications/prescriptions
+			2	completed_medneeds___2	Emergent treatment
+			3	completed_medneeds___3	Chronic condition management
+			5	completed_medneeds___5	Access to primary care/basic medical care
+			6	completed_medneeds___6	Dental care
+			4	completed_medneeds___4	None
+			888	completed_medneeds___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @NONEOFTHEABOVE='4,888' @HIDECHOICE='999'"		
+214	"[completed_foodinsecurity]
+Show the field ONLY if: [completed_deflection] = '1'"	Food insecurity at program completion	radio		
+			3	Currently receiving food assistance	
+			1	Needs access to food assistance	
+			2	Does not need food assistance	
+			888	Don't know	
+			Custom alignment: LV		
+215	"[completed_insurance]
+Show the field ONLY if: [completed_deflection] = '1'"	Insurance status at program completion	checkbox		
+			1	completed_insurance___1	Uninsured
+			7	completed_insurance___7	Insured
+			888	completed_insurance___888	Don't know
+			"Custom alignment: LV
+Field Annotation: @HIDECHOICE='2,3,4,5,6,999' @NONEOFTHEABOVE='1,7,888'"		
+217	[qual_notes]	(Optional) Is there anything else you would like to share about this participant's journey through the deflection program?***Please do not include any PHI or identifying information (names, locations, dates, etc.)***	notes		
+					
+					
+					
+218	[deflection_completion_complete]	"Section Header: Form Status
+Complete?"	dropdown		
+			0	Incomplete	
+			1	Unverified	
+			2	Complete	

@@ -78,8 +78,8 @@ export function IntakeForm({ initial = {}, id, revision }: {
       ? "border-rose-200 bg-rose-50 text-rose-900"
       : "border-teal-200 bg-teal-50 text-teal-900"}`}>
       {completeness.totalMissing
-        ? <><AlertCircle size={19} className="mt-0.5 shrink-0" aria-hidden="true" /><p><strong>{completeness.totalMissing} unanswered item{completeness.totalMissing === 1 ? "" : "s"}.</strong> Incomplete questions and sections are marked below. Saving always keeps this intake as a draft; completion is not available in this workflow.</p></>
-        : <><Save size={19} className="mt-0.5 shrink-0" aria-hidden="true" /><p><strong>All visible questions have answers.</strong> Saving still keeps this intake as a draft; completion is not available in this workflow.</p></>}
+        ? <><AlertCircle size={19} className="mt-0.5 shrink-0" aria-hidden="true" /><p><strong>{completeness.totalMissing} unanswered item{completeness.totalMissing === 1 ? "" : "s"}.</strong> Answer all applicable questions before requesting review. Saving keeps this intake as a draft.</p></>
+        : <><Save size={19} className="mt-0.5 shrink-0" aria-hidden="true" /><p><strong>All visible questions have answers.</strong> Save the draft, then request review from the record page.</p></>}
     </div>
     {state.message && <div role="alert" className="error-box">
       <p className="font-semibold">{state.message}</p>
@@ -144,7 +144,7 @@ export function IntakeForm({ initial = {}, id, revision }: {
     </section>)}
     {review && <section className="panel">
       <h2 className="text-xl font-bold">Review intake</h2>
-      <p className="mb-6 mt-2 text-sm text-slate-500">Review answered and unanswered items before saving. Saving always creates or updates a draft; no completion action is available.</p>
+      <p className="mb-6 mt-2 text-sm text-slate-500">Review answers before saving. A different reviewer must approve the saved draft; this is not a participant signature.</p>
       {intakeSections.map((section) => <div key={section.title} className="mb-6">
         <h3 className="mb-3 border-b border-slate-200 pb-2 font-semibold text-teal-900">{section.title}</h3>
         <dl className="grid gap-3">{section.fields.filter((field) => !field.when || answers[field.when.key] === field.when.value).map((field) => {

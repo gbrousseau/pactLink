@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { intakeFields } from "../src/lib/intake-fields";
 import { getIntakeCompleteness, parseFormAnswers, validateAnswers, type Answers } from "../src/lib/intake-validation";
-import { canEdit, canView, developmentEnabled, type User } from "../src/lib/access";
+import { canEdit, canReview, canView, databaseConnectionString, demoAccessEnabled, developmentEnabled, hostedDemoEnabled, type User } from "../src/lib/access";
 import { searchSchema } from "../src/lib/submissions";
 
 const user: User = { id: "test", display_name: "Test", role: "editor", group_id: "north", group_name: "North" };
@@ -77,10 +77,32 @@ describe("Access controls", () => {
     expect(canEdit({ ...user, role: "viewer" }, "north")).toBe(false);
     expect(canEdit({ ...user, role: "admin" }, "south")).toBe(true);
   });
+  it("limits reviewers to reviewing within their assigned group", () => {
+    const reviewer: User = { ...user, role: "reviewer" };
+    expect(canView(reviewer, "north")).toBe(true);
+    expect(canEdit(reviewer, "north")).toBe(false);
+    expect(canReview(reviewer, "north")).toBe(true);
+    expect(canReview(reviewer, "south")).toBe(false);
+    expect(canReview(user, "north")).toBe(false);
+    expect(canReview({ ...user, role: "admin" }, "south")).toBe(true);
+  });
   it("blocks production even when the development flag is set", () => {
     expect(developmentEnabled({ NODE_ENV: "production", DEV_AUTH_ENABLED: "true" })).toBe(false);
     expect(developmentEnabled({ NODE_ENV: "development" })).toBe(false);
     expect(developmentEnabled({ NODE_ENV: "development", DEV_AUTH_ENABLED: "true" })).toBe(true);
+  });
+  it("allows hosted production demo only with its dedicated flag and database URL", () => {
+    const demo: NodeJS.ProcessEnv = { NODE_ENV: "production", DEMO_MODE_ENABLED: "true", DEMO_DATABASE_URL: "postgres://demo", DATABASE_URL: "postgres://other" };
+    expect(hostedDemoEnabled(demo)).toBe(true);
+    expect(demoAccessEnabled(demo)).toBe(true);
+    expect(databaseConnectionString(demo)).toBe("postgres://demo");
+    expect(hostedDemoEnabled({ ...demo, DEMO_DATABASE_URL: "" })).toBe(false);
+    expect(demoAccessEnabled({ NODE_ENV: "production", DEV_AUTH_ENABLED: "true", DATABASE_URL: "postgres://other" })).toBe(false);
+    expect(() => databaseConnectionString({ NODE_ENV: "production", DEMO_MODE_ENABLED: "true", DATABASE_URL: "postgres://other" })).toThrow("DEMO_DATABASE_URL is required");
+    expect(() => databaseConnectionString({ NODE_ENV: "production", DATABASE_URL: "postgres://other" })).toThrow("blocked");
+  });
+  it("keeps local development on DATABASE_URL even if hosted demo variables are present", () => {
+    expect(databaseConnectionString({ NODE_ENV: "development", DEV_AUTH_ENABLED: "true", DATABASE_URL: "postgres://local", DEMO_MODE_ENABLED: "true", DEMO_DATABASE_URL: "postgres://demo" })).toBe("postgres://local");
   });
 });
 describe("Search input", () => {
