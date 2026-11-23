@@ -18,6 +18,7 @@ Configure the web service to use:
 - **Root Directory / Docker build context:** repository root
 - **Dockerfile path:** `Dockerfile`
 - **Pre-Deploy Command:** `npm run db:setup:demo`
+- **Health Check Path:** `/api/health`
 - **Environment variables** in Render's Environment settings:
   - `DEMO_MODE_ENABLED=true`
   - `DEMO_DATABASE_URL`: the Render PostgreSQL **Internal Database URL**
@@ -49,7 +50,13 @@ synthetic import CSV, and screenshots.
    Environment settings. Use the database's internal URL when the services are
    in the same Render region.
 4. Set the web service's Pre-Deploy Command to `npm run db:setup:demo`.
-5. Deploy and verify the app using synthetic records only.
+5. Set the web service's Health Check Path to `/api/health`.
+6. Deploy and verify the app using synthetic records only.
+
+The health endpoint performs a short database readiness query and returns only
+`{"status":"ok"}` on success. If the configured database cannot be reached, it
+returns HTTP 503 with a support incident ID; connection strings and database
+errors are not returned to the caller.
 
 Render's available service-access controls should be used to limit who can reach
 the demo. The in-app account selector is only a development convenience, not

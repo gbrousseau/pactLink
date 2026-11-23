@@ -77,6 +77,11 @@ Configure Render's one-shot **Pre-Deploy Command** as:
 npm run db:setup:demo
 ```
 
+Set Render's **Health Check Path** to `/api/health`. This endpoint checks that
+the app can reach its configured database with a short `SELECT 1` query. It
+returns a minimal success response or HTTP 503 without exposing connection
+details.
+
 The command requires `NODE_ENV=production`, `DEMO_MODE_ENABLED=true`, and a
 non-empty `DEMO_DATABASE_URL`; it always connects using `DEMO_DATABASE_URL` and
 never falls back to `DATABASE_URL`. Set the same demo variables on the web service
