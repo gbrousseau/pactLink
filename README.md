@@ -7,7 +7,12 @@ workflows, review, and synthetic reporting.
 > criminal justice, legal, health, or substance-use information. It is not CJIS
 > or HIPAA compliant or certified. The demo login lets any visitor select any
 > role, including administrator. Restrict access to the Render service and use
-> only fabricated data.
+> only fabricated data, including uploaded PDFs.
+
+The demo supports Consent (with an optional PDF) followed by Intake and review.
+Screening and Services and Program Completion are placeholders awaiting their
+questions and approval workflows; the app cannot yet track a referral through
+program completion. Consent withdrawal is not implemented.
 
 ## Deploy a synthetic demo to Render
 

@@ -10,7 +10,7 @@ export default async function ImportPage() {
   const groups = await listImportGroups(user);
   return <div className="space-y-6">
     <Link href="/forms" className="text-sm text-teal-800 hover:underline">← Back to library</Link>
-    <h1 className="text-3xl font-bold">Import intake drafts</h1>
+    <h1 className="text-3xl font-bold">Import referral drafts</h1>
     <Link href="/forms/import/batches" className="btn-secondary">View import history and undo</Link>
     <ImportForm groups={groups} />
   </div>;

@@ -10,6 +10,7 @@ import { changeArchive, decideReview, requestReview, saveSubmission } from "@/li
 import { importIntakes, MAX_IMPORT_BYTES, parseIntakeImport, type ImportIssue } from "@/lib/intake-import";
 import { changeImportedRemoval, importHashState, undoImportBatch } from "@/lib/import-removal";
 import { changePrototypeRemoval, createPrototypeExport } from "@/lib/redcap-prototype";
+import { consentDocument, parseConsent, submitConsent } from "@/lib/consent";
 
 export type FormState = { message?: string; errors?: FieldErrors; answers?: Answers };
 export type ActionState = { error?: string };
@@ -35,6 +36,19 @@ export async function loginAction(_: ActionState, form: FormData): Promise<Actio
 export async function logoutAction() {
   await destroySession();
   redirect("/login");
+}
+export async function consentAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const id = form.get("id");
+  if (id !== null && typeof id !== "string") return { error: "Invalid record identifier." };
+  let saved: string;
+  try {
+    const input = parseConsent(form);
+    const document = await consentDocument(form);
+    saved = await submitConsent(user, input, document, id || undefined, id ? Number(form.get("revision")) : undefined);
+  } catch (error) { return { error: safeError(error) }; }
+  revalidatePath("/forms");
+  redirect(`/forms/${saved}?saved=1`);
 }
 export async function saveIntakeAction(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
@@ -84,7 +98,7 @@ export async function reviewAction(_: ActionState, form: FormData): Promise<Acti
 }
 export async function importIntakesAction(form: FormData): Promise<ImportState> {
   const user = await requireUser();
-  if (user.role !== "admin") return { error: "Only administrators can import intakes." };
+  if (user.role !== "admin") return { error: "Only administrators can import referrals." };
   const file = form.get("file");
   const group = form.get("group");
   const intent = form.get("intent");
@@ -130,7 +144,7 @@ export async function redcapPrototypeAction(_: ActionState, form: FormData): Pro
   const user = await requireUser();
   const id = z.uuid().safeParse(form.get("submissionId"));
   const version = z.coerce.number().int().positive().safeParse(form.get("approvedVersion"));
-  if (!id.success || !version.success) return { error: "Invalid intake or approved version." };
+  if (!id.success || !version.success) return { error: "Invalid referral or approved version." };
   try { await createPrototypeExport(user, id.data, version.data, form); }
   catch (error) { return { error: safeError(error) }; }
   revalidatePath(`/forms/${id.data}`);

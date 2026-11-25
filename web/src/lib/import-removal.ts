@@ -101,7 +101,7 @@ export async function changeImportedRemoval(user: User, id: string, revision: nu
   adminOnly(user);
   if (!z.uuid().safeParse(id).success || !Number.isInteger(revision) || revision < 1 ||
       (action === "duplicate" && (!target || !z.uuid().safeParse(target).success || target === id))) {
-    throw new WorkflowError("Provide a valid record, revision, and different existing intake identifier.", "invalid");
+    throw new WorkflowError("Provide a valid record, revision, and different existing referral identifier.", "invalid");
   }
   const cleanReason = reasonText(reason);
   return transaction(async (client) => {
@@ -119,13 +119,13 @@ export async function changeImportedRemoval(user: User, id: string, revision: nu
     if (!row || row.revision !== revision) throw new WorkflowError("The record changed. Reload before continuing.", "conflict");
     if (action === "duplicate") {
       const other = records.rows.find((entry) => entry.id === target);
-      if (!other || other.removed_at || other.status === "archived") throw new WorkflowError("The existing intake must be active and available.", "invalid");
+      if (!other || other.removed_at || other.status === "archived") throw new WorkflowError("The existing referral must be active and available.", "invalid");
       const approved = await client.query("SELECT 1 FROM approved_intake_versions WHERE submission_id=$1 LIMIT 1", [id]);
       if (row.removed_at || row.legal_hold || row.status !== "draft" || !["draft", "returned"].includes(row.review_state) || approved.rowCount) {
         throw new WorkflowError("Only unapproved imported drafts without a legal hold can be marked as duplicates.", "invalid");
       }
     } else {
-      if (!row.removed_at) throw new WorkflowError("This intake is not removed.", "invalid");
+      if (!row.removed_at) throw new WorkflowError("This referral is not removed.", "invalid");
       const activeOther = await client.query(
         `SELECT 1 FROM intake_import_batches b JOIN intake_import_sources i ON i.batch_id=b.id
          JOIN submissions s ON s.id=i.submission_id

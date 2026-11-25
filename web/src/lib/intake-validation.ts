@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { intakeFields, intakeSections, otherOption } from "./intake-fields";
+import { intakeFields, intakeSections, otherOption, visibleIntakeFields } from "./intake-fields";
 
 export type Answers = Record<string, string | string[]>;
 export type FieldErrors = Record<string, string>;
@@ -45,7 +45,7 @@ export function getIntakeCompleteness(answers: Answers): IntakeCompleteness {
 
 export function parseFormAnswers(form: FormData): Answers {
   const answers: Answers = {};
-  for (const field of intakeFields) {
+  for (const field of visibleIntakeFields) {
     const value = field.type === "multi" ? form.getAll(field.key) : form.get(field.key) ?? "";
     if (Array.isArray(value)) {
       answers[field.key] = value.map((entry) => {
@@ -65,17 +65,17 @@ export function parseFormAnswers(form: FormData): Answers {
   return answers;
 }
 
-export function validateAnswers(answers: Answers, submit: boolean, today = new Date().toISOString().slice(0, 10)): FieldErrors {
+export function validateAnswers(answers: Answers, submit: boolean, today = new Date().toISOString().slice(0, 10), birthDate?: string): FieldErrors {
   const errors: FieldErrors = {};
   const parsed = answersSchema.safeParse(answers);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) errors[String(issue.path[0] ?? "form")] = issue.message;
     return errors;
   }
-  for (const field of intakeFields) {
+  for (const field of visibleIntakeFields) {
     const value = answers[field.key] ?? (field.type === "multi" ? [] : "");
     const selected = Array.isArray(value) ? value : value ? [value] : [];
-    if (submit && field.required && selected.length === 0) errors[field.key] = `${field.label} is required to submit.`;
+    if (submit && field.required && visibleIntakeFields.includes(field) && selected.length === 0) errors[field.key] = `${field.label} is required to submit.`;
     if (field.options && selected.some((option) => !field.options?.includes(option))) errors[field.key] = "Select a listed option.";
     if (new Set(selected).size !== selected.length) errors[field.key] = "Duplicate selections are not allowed.";
     if (field.type === "date" && typeof value === "string" && value) {
@@ -100,7 +100,7 @@ export function validateAnswers(answers: Answers, submit: boolean, today = new D
       errors[field.key] = "Clear this answer because its condition no longer applies.";
     }
   }
-  const birth = answers.dob;
+  const birth = birthDate ?? answers.dob;
   if (typeof birth === "string" && isoDate.safeParse(birth).success) {
     for (const key of ["contactDate", "eligibilityDate", "date"]) {
       const value = answers[key];

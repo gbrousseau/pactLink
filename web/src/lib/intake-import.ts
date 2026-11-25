@@ -56,12 +56,12 @@ export function parseIntakeImport(bytes: Uint8Array): ParsedImport {
 }
 
 export async function listImportGroups(user: User) {
-  if (user.role !== "admin") throw new WorkflowError("Only administrators can import intakes.", "forbidden");
+  if (user.role !== "admin") throw new WorkflowError("Only administrators can import referrals.", "forbidden");
   return (await database().query<{ id: string; name: string }>("SELECT id,name FROM app_groups ORDER BY name")).rows;
 }
 
 export async function importIntakes(user: User, group: string, parsed: ParsedImport, confirmReimport = false) {
-  if (user.role !== "admin") throw new WorkflowError("Only administrators can import intakes.", "forbidden");
+  if (user.role !== "admin") throw new WorkflowError("Only administrators can import referrals.", "forbidden");
   if (!parsed.rows.length) throw new WorkflowError("No valid records are available to import.", "invalid");
   return transaction(async (client) => {
     const groupExists = await client.query("SELECT 1 FROM app_groups WHERE id=$1", [group]);

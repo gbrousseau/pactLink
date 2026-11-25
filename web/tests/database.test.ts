@@ -2,8 +2,9 @@ import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { saveSubmission, getSubmission, listSubmissions, getAudit, getRevisions, getApprovedVersions, getReviewDecisions, requestReview, decideReview, changeArchive, searchSchema } from "../src/lib/submissions";
-import { database } from "../src/lib/db";
+import { saveSubmission as saveIntake, createDraft, getSubmission, listSubmissions, getAudit, getRevisions, getApprovedVersions, getReviewDecisions, requestReview, decideReview, changeArchive, searchSchema } from "../src/lib/submissions";
+import { database, transaction } from "../src/lib/db";
+import { consentDocument, downloadConsent, listConsent, parseConsent, submitConsent, type ConsentInput } from "../src/lib/consent";
 import type { User } from "../src/lib/access";
 import type { Answers } from "../src/lib/intake-validation";
 import { intakeFields, otherOption } from "../src/lib/intake-fields";
@@ -20,7 +21,7 @@ const viewer: User = { ...north, id: "north-viewer", role: "viewer" };
 const admin: User = { ...north, id: "demo-admin", role: "admin" };
 const reviewer: User = { ...north, id: "north-reviewer", role: "reviewer" };
 const southReviewer: User = { ...south, id: "south-reviewer", role: "reviewer" };
-const answers: Answers = { name: "Synthetic Test Record", dob: "1990-01-01", programType: "Deflection", date: "2026-01-01", navigator: "Demo Navigator" };
+const answers: Answers = { name: "Synthetic Test Record", dob: "1990-01-01", programType: "Law Enforcement Deflection", date: "2026-01-01", navigator: "Demo Navigator" };
 function completeAnswers(): Answers {
   const result: Answers = {};
   for (const field of intakeFields) {
@@ -39,6 +40,40 @@ function completeAnswers(): Answers {
 }
 let management: Pool;
 let testName: string;
+const consent: ConsentInput = { firstName: "Synthetic", middleName: "", lastName: "Person", dob: "1990-01-01", address: "123 Example Street", phone: "503-555-0100", email: "synthetic@example.test", emergencyName: "", emergencyPhone: "", agreed: "yes", signed: "yes" };
+describe("Synthetic consent validation", () => {
+  it("requires identity and both confirmations, but not a PDF or optional contacts", async () => {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(consent)) form.set(key, value);
+    expect(parseConsent(form)).toEqual(consent);
+    expect(await consentDocument(form)).toBeNull();
+    form.set("document", new File([], "undefined", { type: "application/octet-stream" }));
+    expect(await consentDocument(form)).toBeNull();
+    form.set("document", new File([], "empty.pdf", { type: "application/pdf" }));
+    await expect(consentDocument(form)).rejects.toThrow("nonempty PDF");
+    for (const key of ["firstName", "lastName", "dob", "address", "phone", "email", "agreed", "signed"]) {
+      const invalid = new FormData();
+      for (const [name, value] of Object.entries(consent)) if (name !== key) invalid.set(name, value);
+      expect(() => parseConsent(invalid)).toThrow();
+    }
+    form.set("document", new File(["not a PDF"], "example.pdf", { type: "application/pdf" }));
+    await expect(consentDocument(form)).rejects.toThrow("PDF");
+    form.set("document", new File(["%PDF-1.4\n%%EOF"], "example.pdf", { type: "application/pdf" }));
+    expect((await consentDocument(form))?.toString()).toContain("%PDF-");
+    form.set("document", new File([new Uint8Array(4 * 1024 * 1024 + 1)], "large.pdf", { type: "application/pdf" }));
+    await expect(consentDocument(form)).rejects.toThrow("4 MiB");
+  });
+});
+async function saveSubmission(user: User, value: Answers, id?: string, revision?: number) {
+  if (id) return saveIntake(user, value, id, revision);
+  if (user.role !== "editor" && user.role !== "admin") return saveIntake(user, value);
+  return transaction(async (client) => {
+    const created = await createDraft(client, user, user.group_id, value);
+    await client.query(`INSERT INTO consent_versions(submission_id,version,first_name,middle_name,last_name,date_of_birth,address,phone,email,emergency_name,emergency_phone,agreed_to_share,signed_attested,created_by)
+      VALUES ($1,1,'Synthetic','','Person','1990-01-01','Example','503-555-0100','synthetic@example.test','','',true,true,$2)`, [created, user.id]);
+    return created;
+  });
+}
 async function seedSubmitted(user: User, value: Answers = answers) {
   const id = await saveSubmission(user, value);
   await database().query(
@@ -67,6 +102,70 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await database().query(await readFile(new URL("../db/003-intake-import.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/004-import-removal.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/005-redcap-prototype.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/006-consent.sql", import.meta.url), "utf8"));
+  });
+  it("creates consent first, preserves versions and approvals, and authorizes downloads", async () => {
+    await expect(saveIntake(north, {})).rejects.toThrow("consent");
+    await expect(submitConsent(viewer, consent, null)).rejects.toMatchObject({ code: "invalid" });
+    const id = await submitConsent(north, consent, null);
+    expect((await listConsent(north, id))[0].has_document).toBe(false);
+    expect(await listConsent(south, id)).toEqual([]);
+    await expect(submitConsent(south, consent, null, id, 1)).rejects.toMatchObject({ code: "missing" });
+    await saveIntake(north, completeAnswers(), id, 1);
+    expect((await getSubmission(north, id))?.answers.name).toBeUndefined();
+    await requestReview(north, id, 2);
+    await decideReview(reviewer, id, 3, "approve");
+    const pdf = Buffer.from("%PDF-1.4\nsynthetic\n%%EOF");
+    await submitConsent(north, { ...consent, firstName: "Corrected" }, pdf, id, 4);
+    expect((await getSubmission(north, id))?.review_state).toBe("approved");
+    expect(await getApprovedVersions(north, id)).toHaveLength(1);
+    expect((await listConsent(viewer, id)).map((item) => item.version)).toEqual([2, 1]);
+    expect(await downloadConsent(viewer, id, 2)).toEqual(pdf);
+    await expect(downloadConsent(south, id, 2)).rejects.toMatchObject({ code: "missing" });
+    await expect(downloadConsent(viewer, id, 1)).rejects.toMatchObject({ code: "missing" });
+    await expect(submitConsent(north, consent, null, id, 4)).rejects.toMatchObject({ code: "conflict" });
+    await expect(database().query("UPDATE consent_versions SET first_name='forged' WHERE submission_id=$1", [id])).rejects.toThrow("append-only");
+    expect((await getAudit(admin, id)).some((event) => event.action === "consent_download")).toBe(true);
+  });
+  it("blocks legacy intake and approval without consent and serializes consent updates", async () => {
+    const id = await transaction((client) => createDraft(client, north, "north", completeAnswers()));
+    await expect(saveIntake(north, completeAnswers(), id, 1)).rejects.toThrow("consent");
+    await expect(requestReview(north, id, 1)).rejects.toThrow("consent");
+    const outcomes = await Promise.allSettled([submitConsent(north, consent, null, id, 1), submitConsent(north, consent, null, id, 1)]);
+    expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect((await listConsent(north, id))).toHaveLength(1);
+    expect((await getSubmission(north, id))?.answers.name).toBe("Synthetic Test Record");
+    await requestReview(north, id, 2);
+  });
+  it("preserves historical approval but blocks new exports until consent is submitted", async () => {
+    const id = await transaction((client) => createDraft(client, north, "north", completeAnswers()));
+    await database().query(`INSERT INTO approved_intake_versions
+      (submission_id,version,draft_revision,answers,template_version,editor_ids,requested_by,requested_at,approved_by)
+      SELECT id,1,1,answers,template_version,ARRAY['north-editor'],'north-editor',now(),'north-reviewer'
+      FROM submissions WHERE id=$1`, [id]);
+    await database().query("UPDATE submissions SET status='submitted',review_state='approved' WHERE id=$1", [id]);
+    const codebook = await loadRedcapCodebook();
+    const form = new FormData();
+    form.set("synthetic", "yes"); form.set("codebookHash", codebook.hash);
+    await expect(createPrototypeExport(reviewer, id, 1, form)).rejects.toThrow("consent");
+    await submitConsent(north, consent, null, id, 1);
+    expect((await getApprovedVersions(north, id))[0].answers.name).toBe("Synthetic Test Record");
+    expect((await getSubmission(north, id))?.review_state).toBe("approved");
+    await expect(createPrototypeExport(reviewer, id, 1, form)).resolves.toBeTruthy();
+  });
+  it("rolls back consent and its PDF if audit insertion fails", async () => {
+    const id = await transaction((client) => createDraft(client, north, "north", completeAnswers()));
+    await database().query(`CREATE FUNCTION fail_consent_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.action='consent_submit' THEN RAISE EXCEPTION 'Simulated consent audit failure'; END IF; RETURN NEW; END; $$;
+      CREATE TRIGGER test_consent_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_consent_audit();`);
+    try {
+      await expect(submitConsent(north, consent, Buffer.from("%PDF-1.4\n%%EOF"), id, 1)).rejects.toThrow("Simulated consent audit failure");
+      expect(await listConsent(north, id)).toEqual([]);
+      expect((await getSubmission(north, id))?.revision).toBe(1);
+    } finally {
+      await database().query("DROP TRIGGER test_consent_audit ON audit_events; DROP FUNCTION fail_consent_audit();");
+    }
   });
   it("restricts, preserves and audits synthetic REDCap prototype files", async () => {
     const id = await saveSubmission(north, completeAnswers());
@@ -151,12 +250,12 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     expect((await getSubmission(north, id))?.answers.name).toBe(answers.name);
     expect(await getSubmission(south, id)).toBeNull();
     expect((await listSubmissions(south, searchSchema.parse({}))).total).toBe(0);
-    expect((await listSubmissions(admin, searchSchema.parse({}))).total).toBe(1);
+    expect((await listSubmissions(admin, searchSchema.parse({}))).records.some((record) => record.id === id)).toBe(true);
     expect(await getAudit(south, id)).toEqual([]);
     await expect(saveSubmission(viewer, answers)).rejects.toMatchObject({ code: "forbidden" });
     await expect(saveSubmission(south, answers, id, 1)).rejects.toMatchObject({ code: "missing" });
     expect((await getSubmission(north, id))?.revision).toBe(1);
-    await saveSubmission(north, { ...answers, phone: "503-555-0100" }, id, 1);
+    await saveSubmission(north, { ...answers, navigator: "Changed Navigator" }, id, 1);
     await expect(saveSubmission(north, answers, id, 1)).rejects.toMatchObject({ code: "conflict" });
     expect((await getSubmission(north, id))?.revision).toBe(2);
     expect((await getSubmission(north, id))?.status).toBe("draft");
@@ -164,7 +263,7 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     expect((await getRevisions(north, id))[1].answers.phone).toBeUndefined();
     expect(await getRevisions(south, id)).toEqual([]);
     const events = await getAudit(north, id);
-    expect(events.some((event) => event.action === "save_draft" && event.changed_fields.includes("phone"))).toBe(true);
+    expect(events.some((event) => event.action === "save_draft" && event.changed_fields.includes("navigator"))).toBe(true);
   });
   it("requires complete answers and explicit permissions before requesting review", async () => {
     const id = await saveSubmission(north, answers);
@@ -184,14 +283,14 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     expect((await getSubmission(north, id))?.review_state).toBe("approved");
     expect((await getApprovedVersions(north, id))[0]).toMatchObject({ version: 1, draft_revision: 2, approved_by: reviewer.id });
     expect(await getApprovedVersions(south, id)).toEqual([]);
-    await saveSubmission(north, { ...completeAnswers(), name: "Synthetic Updated" }, id, 3);
+    await saveSubmission(north, { ...completeAnswers(), navigator: "Synthetic Updated" }, id, 3);
     expect((await getSubmission(north, id))?.review_state).toBe("draft");
     expect((await getApprovedVersions(north, id))[0].answers.name).toBe("Synthetic Test Record");
     await requestReview(north, id, 4);
     await decideReview(reviewer, id, 5, "approve");
     const versions = await getApprovedVersions(north, id);
     expect(versions.map((v) => v.version)).toEqual([2, 1]);
-    expect(versions[0].answers.name).toBe("Synthetic Updated");
+    expect(versions[0].answers.navigator).toBe("Synthetic Updated");
     expect(versions[1].answers.name).toBe("Synthetic Test Record");
     await expect(database().query("UPDATE approved_intake_versions SET version=99 WHERE submission_id=$1", [id])).rejects.toThrow("append-only");
     expect((await getReviewDecisions(north, id)).map((d) => d.decision)).toEqual(["approved", "approved"]);
@@ -288,15 +387,15 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
   });
   it("paginates, filters by program and navigator, and preserves draft blank dates", async () => {
     for (let index = 0; index < 21; index++) {
-      await saveSubmission(south, { name: `Synthetic Pagination ${String(index).padStart(2, "0")}`, programType: "Active Outreach Referral", navigator: "Paging Demo" });
+      await saveSubmission(south, { name: `Synthetic Pagination ${String(index).padStart(2, "0")}`, programType: "Active Outreach Deflection Referral", navigator: "Paging Demo" });
     }
-    const first = await listSubmissions(south, searchSchema.parse({ program: "Active Outreach Referral", navigator: "Paging", sort: "name", direction: "asc" }));
+    const first = await listSubmissions(south, searchSchema.parse({ program: "Active Outreach Deflection Referral", navigator: "Paging", sort: "name", direction: "asc" }));
     const second = await listSubmissions(south, searchSchema.parse({ page: 2, sort: "name", direction: "asc" }));
     expect(first.total).toBe(21); expect(first.records).toHaveLength(20); expect(second.records).toHaveLength(1);
     expect(first.records[0].date_of_birth).toBeNull();
     expect(first.records[0].participant_name).toBe("Synthetic Pagination 00");
     expect(second.records[0].participant_name).toBe("Synthetic Pagination 20");
-    expect((await listSubmissions(south, searchSchema.parse({ program: "Deflection" }))).total).toBe(0);
+    expect((await listSubmissions(south, searchSchema.parse({ program: "Law Enforcement Deflection" }))).total).toBe(0);
     expect((await listSubmissions(south, searchSchema.parse({ from: "2000-01-01", to: "2000-12-31" }))).total).toBe(0);
   });
   it("rolls back the record mutation if the audit insert fails", async () => {
@@ -330,16 +429,18 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     expect((await getSubmission(south, id))?.status).toBe("draft");
     expect(await getImportSource(north, id)).toBeNull();
     expect((await getImportSource(south, id))?.placeholder_fields).toEqual(["name", "dob"]);
-    await expect(requestReview(south, id, 1)).rejects.toThrow("placeholder");
+    await expect(requestReview(south, id, 1)).rejects.toThrow("consent");
     const completed = completeAnswers();
-    await saveSubmission(south, completed, id, 1);
+    await submitConsent(south, consent, null, id, 1);
+    await saveSubmission(south, completed, id, 2);
     expect((await getImportSource(south, id))?.placeholder_fields).toEqual([]);
-    await requestReview(south, id, 2);
-    await decideReview(southReviewer, id, 3, "approve");
+    await requestReview(south, id, 3);
+    await decideReview(southReviewer, id, 4, "approve");
     expect((await getSubmission(south, id))?.review_state).toBe("approved");
-    await saveSubmission(south, { ...completed, dob: "1900-01-01" }, id, 4);
+    await submitConsent(south, { ...consent, dob: "1900-01-01" }, null, id, 5);
     expect((await getImportSource(south, id))?.placeholder_fields).toEqual(["dob"]);
-    await expect(requestReview(south, id, 5)).rejects.toThrow("placeholder");
+    await saveSubmission(south, completed, id, 6);
+    await expect(requestReview(south, id, 7)).rejects.toThrow("placeholder");
   });
   it("rolls back the entire import if any valid row fails to save", async () => {
     const header = "DOB\tHouseless\tGender\tRace\tAGENCY\tLEA #\tDA #\tCOURT #\tCHARGE CODE\tCHARGE DESCRIPT\tINCIDENT/REFERRAL DATE\tREVIEW STATUS\tHB 4002 REPORTING\tDEFLECT OUTCOME\tCD OUTCOME\tREFERRAL TYPE\tOUTCOME 2\tSUBSTANCE\tSUBSTANCE 2\tDEATHS\tRE-OFFENSE\tNOTES\tOUTCOME3\tARRESTED\tWEIGHT";
@@ -364,7 +465,7 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     const batch = await importIntakes(admin, "north", parsed);
     const initial = await getBatchPreview(admin, batch);
     await expect(getBatchPreview(north, batch)).rejects.toMatchObject({ code: "forbidden" });
-    await saveSubmission(north, { name: "Synthetic edited", dob: "1990-01-01" }, initial.rows[1].id, 1);
+    await submitConsent(north, consent, null, initial.rows[1].id, 1);
     await database().query("UPDATE submissions SET legal_hold=true WHERE id=$1", [initial.rows[2].id]);
     await expect(undoImportBatch(admin, batch, initial.token, "test")).rejects.toMatchObject({ code: "conflict" });
     const current = await getBatchPreview(admin, batch);

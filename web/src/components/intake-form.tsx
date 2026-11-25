@@ -78,7 +78,7 @@ export function IntakeForm({ initial = {}, id, revision }: {
       ? "border-rose-200 bg-rose-50 text-rose-900"
       : "border-teal-200 bg-teal-50 text-teal-900"}`}>
       {completeness.totalMissing
-        ? <><AlertCircle size={19} className="mt-0.5 shrink-0" aria-hidden="true" /><p><strong>{completeness.totalMissing} unanswered item{completeness.totalMissing === 1 ? "" : "s"}.</strong> Answer all applicable questions before requesting review. Saving keeps this intake as a draft.</p></>
+        ? <><AlertCircle size={19} className="mt-0.5 shrink-0" aria-hidden="true" /><p><strong>{completeness.totalMissing} unanswered item{completeness.totalMissing === 1 ? "" : "s"}.</strong> Answer all applicable questions before requesting review. Saving keeps this referral as a draft.</p></>
         : <><Save size={19} className="mt-0.5 shrink-0" aria-hidden="true" /><p><strong>All visible questions have answers.</strong> Save the draft, then request review from the record page.</p></>}
     </div>
     {state.message && <div role="alert" className="error-box">
@@ -128,7 +128,7 @@ export function IntakeForm({ initial = {}, id, revision }: {
               onChange={(event) => set(field.key, event.target.value)} />
           </>}
           {error && <p id={errorId} className="mt-2 text-sm text-red-700">{error}</p>}
-          {!error && missing && <p id={errorId} className="mt-2 text-sm font-medium text-rose-700">Answer this question before the intake can be considered complete.</p>}
+          {!error && missing && <p id={errorId} className="mt-2 text-sm font-medium text-rose-700">Answer this question before the referral can be considered complete.</p>}
           {other && <div hidden={!selected.includes(other)} className="mt-3">
             <label htmlFor={`${field.key}Other`} className="mb-2 block text-sm font-medium">Specify {other.toLowerCase()}{needsOther && <span className="ml-2 text-xs font-semibold text-rose-700">Answer needed</span>}</label>
             <input id={`${field.key}Other`} name={`${field.key}Other`} className="input" maxLength={500}
@@ -137,13 +137,13 @@ export function IntakeForm({ initial = {}, id, revision }: {
               value={typeof answers[`${field.key}Other`] === "string" ? answers[`${field.key}Other`] : ""}
               onChange={(event) => set(`${field.key}Other`, event.target.value)} />
             {state.errors?.[`${field.key}Other`] && <p id={`${field.key}Other-error`} className="mt-2 text-sm text-red-700">{state.errors[`${field.key}Other`]}</p>}
-            {!state.errors?.[`${field.key}Other`] && needsOther && <p id={`${field.key}Other-error`} className="mt-2 text-sm font-medium text-rose-700">Specify the other answer before the intake can be considered complete.</p>}
+            {!state.errors?.[`${field.key}Other`] && needsOther && <p id={`${field.key}Other-error`} className="mt-2 text-sm font-medium text-rose-700">Specify the other answer before the referral can be considered complete.</p>}
           </div>}
         </div>;
       })}</div>
     </section>)}
     {review && <section className="panel">
-      <h2 className="text-xl font-bold">Review intake</h2>
+      <h2 className="text-xl font-bold">Review referral</h2>
       <p className="mb-6 mt-2 text-sm text-slate-500">Review answers before saving. A different reviewer must approve the saved draft; this is not a participant signature.</p>
       {intakeSections.map((section) => <div key={section.title} className="mb-6">
         <h3 className="mb-3 border-b border-slate-200 pb-2 font-semibold text-teal-900">{section.title}</h3>

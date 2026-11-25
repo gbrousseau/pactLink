@@ -19,8 +19,8 @@ export function RedcapPrototypeForm({ id, version, fields, hash, initial }: {
     <div className="rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-950 space-y-2">
       <p className="font-bold">Synthetic prototype only. Do not upload to REDCap or use real personal, legal, or health data.</p>
       <p>The JSON format, conditional rules and completeness have not been verified. All codebook questions are shown, including conditional ones; check applicability manually. Blank questions are omitted, not marked as no. A generated file is not a REDCap submission.</p>
-      <p>Only dates and checkbox answers with exact, unambiguous equivalents were prefilled from approved version {version}. Names, ambiguous choices and confirmation fields must be entered and checked manually. Verify every prefilled answer.</p>
-      <p>New answers entered here are not separately reviewed or approved; the approval applies only to the source Intake.</p>
+      <p>Only dates and checkbox answers with exact, unambiguous equivalents were prefilled from approved version {version}. Names and date of birth are not prefilled; check Consent and enter them manually. Ambiguous choices and confirmation fields also require manual review. Verify every prefilled answer.</p>
+      <p>New answers entered here are not separately reviewed or approved; the approval applies only to the source Referral.</p>
     </div>
     {sections.map((section, index) => <details key={section} className="panel" open={index === 0}>
       <summary className="cursor-pointer text-lg font-bold">{section}</summary>

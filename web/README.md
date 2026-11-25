@@ -1,12 +1,16 @@
 # Deflection Intake Pilot
 
+Each referral begins with Consent and then Intake. Internal identifiers,
+database tables, URLs, and original template references retain their `intake`
+names. Screening and Services and Program Completion are not yet implemented.
+
 Next.js App Router, TypeScript, Tailwind CSS, Zod, and PostgreSQL development/demo application.
 The Intake form is mapped from `../forms_screenshots-06.png` through
 `../forms_screenshots-08.png` (packet version 09.24.2026).
 
 ## Safety boundary
 
-**Use synthetic data only. This is not a CJIS-approved or production-ready system.**
+**Use synthetic data only, including any uploaded PDFs. This is not a CJIS-approved or production-ready system.**
 
 Local database operations and demo login require `DEV_AUTH_ENABLED=true` and refuse
 `NODE_ENV=production`. A hosted, synthetic-only demo may explicitly run with
@@ -111,6 +115,26 @@ Next.js Server Actions enforce same-origin requests.
 
 ## Implemented
 
+- Referral phase 1 is Consent: required first and last names, date of birth,
+  address, phone, email, sharing confirmation and signed-document confirmation;
+  middle name and emergency contact information are optional. A synthetic PDF
+  is optional, up to 4 MiB. PDF checks are basic format checks, not malware
+  scanning or signature verification. A correction creates a new immutable
+  version; earlier values and any earlier PDF remain available to authorized
+  group viewers and administrators. Downloads are audited. A version without
+  a PDF does not copy an earlier PDF.
+- Staff checkboxes are attestations only; the app does not verify a signature
+  or establish legal consent. Consent withdrawal and invalidation are not
+  implemented, so this workflow must not be used for real participants.
+- Consent unlocks phase 2 Intake. Historical and imported records remain
+  consent-unverified until a new consent version is submitted. Their original
+  answers and approved snapshots are retained; corrections do not invalidate
+  earlier Intake approvals. Name and DOB searches use the latest Consent.
+  Consent is required for Intake changes, review and new REDCap prototypes.
+- Phase 3 Screening and Services is shown as awaiting implementation after
+  Intake approval. Phase 4 Program Completion remains locked. Neither phase
+  can yet be recorded or approved; their questions and reporting definitions
+  must be supplied before end-to-end tracking is possible.
 - A **synthetic REDCap JSON prototype**, available to reviewers and
   administrators for an active, currently approved Intake. It uses only an
   immutable approved snapshot for prefill; ambiguous names and choices require
@@ -142,7 +166,9 @@ Next.js Server Actions enforce same-origin requests.
   matching totals (currently the demo program and first-contact categories).
   Other categories remain bar/list/table only until their real semantics are
   approved. This chart selection is illustrative, not validation of real metrics.
-- 34 screenshot-based Intake questions across five responsive sections and review.
+- Screenshot-based Intake questions across five responsive sections and review;
+  identity, contact and participant attestation-name fields were moved out of
+  the Intake editor, while historical snapshots preserve their original values.
 - An always-visible per-question and per-step completion checklist for unanswered
   questions, including conditional and "Other" answers.
 - Every create or edit saves as a draft. Editors request review of a saved draft
@@ -184,7 +210,7 @@ Next.js Server Actions enforce same-origin requests.
   actual CJI or health data.
 - Only valid, unambiguous DOBs are mapped automatically. Missing or ambiguous
   DOBs and all names use clearly labeled generated placeholders; they must be
-  replaced before review. No address field currently exists. Other source fields
+  replaced through Consent before review. Other source fields
   are preserved but not interpreted as Intake answers. Exact-file SHA-256
   duplicate detection blocks retrying the same bytes while any earlier batch
   has active records. Once all earlier records are removed, an administrator
@@ -205,7 +231,7 @@ Next.js Server Actions enforce same-origin requests.
   append-only removal history and audit events. Policies for permanent deletion,
   retention, legal holds, and regulated data require agency approval.
 
-Each new Intake creates a new participant and enrollment. Linking an additional
+Each new referral creates a new participant and enrollment. Linking an additional
 enrollment to an existing participant and duplicate review are future work; name
 matching is deliberately not used to merge people.
 
@@ -222,10 +248,10 @@ Some long option labels are abbreviated for readability. The combined
 "Native Hawaiian or Pacific Islander or Asian" and "HIS" choices preserve the
 source wording pending agency clarification.
 
-The participant-signature line is represented by an explicitly **non-signing**
-attestation-name field. This does not constitute a legally approved signed intake.
-No signed record is generated. Select and approve the signature/document workflow
-before collecting legally operative forms.
+The former Intake attestation-name field is retained only in historical answers.
+The Consent checkbox does not create or verify a legally approved signature.
+Select and approve the signature/document workflow before collecting legally
+operative forms.
 
 ## Validation
 

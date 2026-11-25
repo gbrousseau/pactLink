@@ -4,7 +4,8 @@ import { z } from "zod";
 import { canEdit, canReview, canView, WorkflowError, type User } from "./access";
 import { database, transaction } from "./db";
 import { answersSchema, getIntakeCompleteness, isoDate, validateAnswers, type Answers } from "./intake-validation";
-import { programs } from "./intake-fields";
+import { consentMovedKeys, programs } from "./intake-fields";
+import { requireConsent } from "./consent";
 
 export type Submission = {
   id: string; enrollment_id: string; group_id: string; form_type: "intake";
@@ -15,6 +16,7 @@ export type Submission = {
   removed_at: Date | null;
   review_state: "draft" | "pending_review" | "returned" | "approved" | "legacy";
   review_requested_by: string | null; review_requested_at: Date | null; return_reason: string | null;
+  has_consent: boolean;
 };
 export type AuditEvent = {
   id: string; action: string; occurred_at: Date; display_name: string; changed_fields: string[]; revision: number | null;
@@ -42,7 +44,7 @@ export const searchSchema = z.object({
 }).refine((input) => !input.from || !input.to || input.from <= input.to, { message: "Start date must not follow end date.", path: ["from"] });
 export type Search = z.infer<typeof searchSchema>;
 const sortColumns = { updated: "updated_at", created: "created_at", name: "participant_name", dob: "date_of_birth", contact: "contact_date" };
-const selectColumns = "s.*, to_char(s.date_of_birth,'YYYY-MM-DD') AS date_of_birth, to_char(s.contact_date,'YYYY-MM-DD') AS contact_date";
+const selectColumns = "s.*, to_char(s.date_of_birth,'YYYY-MM-DD') AS date_of_birth, to_char(s.contact_date,'YYYY-MM-DD') AS contact_date, EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id) AS has_consent";
 const text = (answers: Answers, key: string) => typeof answers[key] === "string" ? answers[key] : "";
 
 async function audit(client: PoolClient, user: User, action: string, id: string | null, fields: string[] = [], revision: number | null = null) {
@@ -100,42 +102,41 @@ export async function saveSubmission(user: User, answers: Answers, id?: string, 
   if (Object.keys(errors).length) throw new WorkflowError("Form validation failed.", "invalid");
   answersSchema.parse(answers);
   if (!canEdit(user, user.group_id)) throw new WorkflowError("You do not have editing permission.", "forbidden");
+  if (!id) throw new WorkflowError("Submit consent before creating an Intake draft.", "invalid");
   if (id && (!z.uuid().safeParse(id).success || !Number.isInteger(revision) || !revision || revision < 1)) {
     throw new WorkflowError("Invalid record identifier or revision.", "invalid");
   }
   return transaction(async (client) => {
-    const name = text(answers, "name");
-    const dob = text(answers, "dob") || null;
     const program = text(answers, "programType") || null;
     const contact = text(answers, "contactDate") || null;
     const navigator = text(answers, "navigator");
     if (id) {
       const old = await editable(client, user, id, revision!);
       if (old.status === "archived") throw new WorkflowError("Restore the archived record before editing.", "invalid");
+      const dob = await requireConsent(client, id);
+      const preservedAnswers = { ...answers };
+      for (const key of consentMovedKeys) {
+        delete preservedAnswers[key];
+        if (old.answers[key] !== undefined) preservedAnswers[key] = old.answers[key];
+      }
+      if (Object.keys(validateAnswers(preservedAnswers, false, undefined, dob)).length) throw new WorkflowError("Form validation failed; check dates against the consent date of birth.", "invalid");
+      answers = preservedAnswers;
       const fields = Object.keys(answers).filter((key) => JSON.stringify(old.answers[key]) !== JSON.stringify(answers[key]));
       const status = "draft";
       if (old.status !== status) fields.push("status");
       if (old.review_state !== "draft") fields.push("review_state");
       await client.query(
-        `UPDATE submissions SET answers=$1, participant_name=$2,date_of_birth=$3,program_type=$4,contact_date=$5,
-         navigator_name=$6,status=$7,review_state='draft',review_requested_by=NULL,review_requested_at=NULL,
-         return_reason=NULL,revision=revision+1,updated_by=$8,updated_at=now() WHERE id=$9`,
-        [JSON.stringify(answers), name, dob, program, contact, navigator, status, user.id, id],
-      );
-      await client.query(
-        `UPDATE intake_import_sources SET placeholder_fields = ARRAY(
-          SELECT key FROM jsonb_each_text(placeholder_values)
-          WHERE COALESCE($2::jsonb->>key, '') = '' OR $2::jsonb->>key = value
-          ORDER BY key
-        ) WHERE submission_id=$1`,
-        [id, JSON.stringify(answers)],
+        `UPDATE submissions SET answers=$1,program_type=$2,contact_date=$3,
+         navigator_name=$4,status=$5,review_state='draft',review_requested_by=NULL,review_requested_at=NULL,
+         return_reason=NULL,revision=revision+1,updated_by=$6,updated_at=now() WHERE id=$7`,
+        [JSON.stringify(answers), program, contact, navigator, status, user.id, id],
       );
       await audit(client, user, "save_draft", id, fields, old.revision + 1);
       await snapshot(client, id, user.id);
       await client.query("INSERT INTO draft_contributors(submission_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING", [id, user.id]);
       return id;
     }
-    return createDraft(client, user, user.group_id, answers);
+    throw new WorkflowError("Submit consent before creating an Intake draft.", "invalid");
   });
 }
 export async function changeArchive(user: User, id: string, revision: number, restore: boolean) {
@@ -156,11 +157,12 @@ export async function requestReview(user: User, id: string, revision: number) {
       await transaction(async (client) => {
         const row = await editable(client, user, id, revision);
         if (row.status === "archived" || !["draft", "returned"].includes(row.review_state)) {
-          throw new WorkflowError("Only a draft or returned intake can be sent for review.", "invalid");
+          throw new WorkflowError("Only a draft or returned referral can be sent for review.", "invalid");
         }
+        const dob = await requireConsent(client, id);
         await ensureNoPlaceholders(client, id);
         const parsed = answersSchema.safeParse(row.answers);
-        if (!parsed.success || Object.keys(validateAnswers(row.answers, true)).length || getIntakeCompleteness(row.answers).totalMissing) {
+        if (!parsed.success || Object.keys(validateAnswers(row.answers, true, undefined, dob)).length || getIntakeCompleteness(row.answers).totalMissing) {
           throw new WorkflowError("Answer every applicable question and correct validation errors before requesting review.", "invalid");
         }
         await client.query(
@@ -183,8 +185,9 @@ export async function decideReview(user: User, id: string, revision: number, dec
         if (!canReview(user, row.group_id)) throw new WorkflowError("You do not have review permission.", "forbidden");
         if (row.removed_at) throw new WorkflowError("Restore the removed draft before review.", "invalid");
         if (row.status === "archived" || row.review_state !== "pending_review" || !row.review_requested_by || !row.review_requested_at) {
-          throw new WorkflowError("This intake is not awaiting review.", "invalid");
+          throw new WorkflowError("This referral is not awaiting review.", "invalid");
         }
+        const dob = await requireConsent(client, id);
         const contributors = await client.query<{ user_id: string }>(
           "SELECT user_id FROM draft_contributors WHERE submission_id=$1 ORDER BY user_id", [id],
         );
@@ -193,8 +196,8 @@ export async function decideReview(user: User, id: string, revision: number, dec
         }
         if (decision === "approve") {
           await ensureNoPlaceholders(client, id);
-          if (!answersSchema.safeParse(row.answers).success || Object.keys(validateAnswers(row.answers, true)).length || getIntakeCompleteness(row.answers).totalMissing) {
-            throw new WorkflowError("The intake has missing or invalid answers and cannot be approved.", "invalid");
+          if (!answersSchema.safeParse(row.answers).success || Object.keys(validateAnswers(row.answers, true, undefined, dob)).length || getIntakeCompleteness(row.answers).totalMissing) {
+            throw new WorkflowError("The referral has missing or invalid answers and cannot be approved.", "invalid");
           }
           await client.query(
             `INSERT INTO approved_intake_versions(submission_id,version,draft_revision,answers,template_version,editor_ids,requested_by,requested_at,approved_by)

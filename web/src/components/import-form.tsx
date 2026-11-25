@@ -20,7 +20,7 @@ export function ImportForm({ groups }: { groups: { id: string; name: string }[] 
     startTransition(async () => setResult(await importIntakesAction(form)));
   }
   return <div className="panel space-y-5">
-    <p className="text-sm leading-6 text-slate-600">Development only: import synthetic data using the supplied 25-column CSV or tab-separated template. All records are drafts. No address field exists in the current Intake.</p>
+    <p className="text-sm leading-6 text-slate-600">Development only: import synthetic data using the supplied 25-column CSV or tab-separated template. All records are drafts and require consent before Intake work.</p>
     <label className="block text-sm font-semibold">Assign drafts to group
       <select className="input mt-2" value={group} onChange={(event) => { setGroup(event.target.value); setResult({}); setReimport(false); }}>
         <option value="">Select a group</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -33,7 +33,7 @@ export function ImportForm({ groups }: { groups: { id: string; name: string }[] 
     {result.error && <p role="alert" className="error-box">{result.error}</p>}
     {result.hash && <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
       <p role="status">{result.imported !== undefined ? `Imported ${result.imported} drafts.` : `${result.valid} of ${result.total} records can be imported.`} {result.issues?.length ?? 0} records skipped.</p>
-      <p>Every name is a generated placeholder; {result.mockDob} records also need a generated DOB. Replace placeholders before review. All source columns are retained; only valid DOBs are mapped to Intake. Exact-file matching does not detect duplicates in changed files.</p>
+      <p>Every name is a generated placeholder; {result.mockDob} records also need a generated DOB. Replace placeholders before review. All source columns are retained; only valid DOBs are mapped to Referral. Exact-file matching does not detect duplicates in changed files.</p>
       {!!result.previous?.batches && <p className="font-semibold">This file was imported previously. {result.previous.active} prior records remain active. Re-import is allowed only after all prior records are removed.</p>}
       {!!result.issues?.length && <details><summary>Skipped record numbers (first 100)</summary><ul className="mt-2 list-inside list-disc">{result.issues.slice(0, 100).map((issue) => <li key={issue.record}>Record {issue.record}: {issue.message}</li>)}</ul><p>Record numbers count CSV records, including the header; a quoted multiline record counts as one.</p></details>}
       {result.imported === undefined && <>

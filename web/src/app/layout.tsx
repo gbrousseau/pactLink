@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Deflection Workspace",
-  description: "Synthetic-data deflection intake demo.",
+  description: "Synthetic-data deflection referral demo.",
   robots: { index: false, follow: false },
 };
 

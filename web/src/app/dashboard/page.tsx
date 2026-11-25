@@ -33,10 +33,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     </div>
     <div className="grid gap-3 sm:grid-cols-2">
       <Link href="/forms" className="panel flex items-center justify-between gap-4 !p-5 hover:border-teal-500">
-        <div><h2 className="font-bold">Find intakes</h2><p className="mt-1 text-sm text-slate-500">Search and review records available to your account.</p></div><ArrowRight size={19} className="shrink-0 text-teal-700" />
+        <div><h2 className="font-bold">Find referrals</h2><p className="mt-1 text-sm text-slate-500">Search and review records available to your account.</p></div><ArrowRight size={19} className="shrink-0 text-teal-700" />
       </Link>
       {(user.role === "editor" || user.role === "admin") && <Link href="/forms/new" className="panel flex items-center justify-between gap-4 !p-5 hover:border-teal-500">
-        <div><h2 className="font-bold">Create an intake</h2><p className="mt-1 text-sm text-slate-500">Start a new working draft.</p></div><FilePlus2 size={19} className="shrink-0 text-teal-700" />
+        <div><h2 className="font-bold">New referral</h2><p className="mt-1 text-sm text-slate-500">Start a new working draft.</p></div><FilePlus2 size={19} className="shrink-0 text-teal-700" />
       </Link>}
     </div>
     <section aria-labelledby="demo-report-title" className="space-y-5">
@@ -44,7 +44,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="flex gap-3"><ShieldAlert className="shrink-0" size={23} /><div>
           <h2 id="demo-report-title" className="text-lg font-bold">Synthetic report demonstration — not real program data</h2>
           <p className="mt-2 text-sm font-semibold">Do not use these numbers to evaluate programs, make real-life decisions, plan budgets, or request grants.</p>
-          <p className="mt-2 text-sm">Illustrative fixed examples only. This report does not read Intake records or approved snapshots. Categories, dates, and counting rules are provisional and require client approval.</p>
+          <p className="mt-2 text-sm">Illustrative fixed examples only. This report does not read Referral records or approved snapshots. Categories, dates, and counting rules are provisional and require client approval.</p>
         </div></div>
       </div>
       <form method="get" className="panel !p-5">

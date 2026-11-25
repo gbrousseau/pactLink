@@ -12,7 +12,7 @@ export function ReviewAction({ id, revision, intent }: { id: string; revision: n
     {intent === "return" && <div>
       <label htmlFor="return-reason" className="mb-2 block text-sm font-semibold">Reason for returning this draft</label>
       <textarea id="return-reason" name="reason" required maxLength={2000} rows={3} className="input"
-        placeholder="Explain what needs to change. This note is visible to users who can access this intake." />
+        placeholder="Explain what needs to change. This note is visible to users who can access this referral." />
     </div>}
     <button disabled={pending} className={intent === "approve" || intent === "request" ? "btn-primary" : "btn-secondary"}>
       {pending ? "Saving..." : label}

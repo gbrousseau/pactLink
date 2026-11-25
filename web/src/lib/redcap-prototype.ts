@@ -3,6 +3,7 @@ import { z } from "zod";
 import { canReview, WorkflowError, type User } from "./access";
 import { database, transaction } from "./db";
 import { loadRedcapCodebook, type RedcapCodebook } from "./redcap-codebook";
+import { requireConsent } from "./consent";
 
 export type PrototypeValues = Record<string, string | string[]>;
 type ExportRow = { id: string; approved_version: number; created_at: Date; display_name: string; removed_at: Date | null };
@@ -56,7 +57,7 @@ function formValue(input: FormData, name: string) {
 }
 
 async function permitted(user: User, id: string) {
-  if (!uuid.safeParse(id).success) throw new WorkflowError("Invalid intake identifier.", "invalid");
+  if (!uuid.safeParse(id).success) throw new WorkflowError("Invalid referral identifier.", "invalid");
   const result = await database().query<{ group_id: string; review_state: string; status: string; removed_at: Date | null }>(
     "SELECT group_id,review_state,status,removed_at FROM submissions WHERE id=$1", [id]);
   const row = result.rows[0];
@@ -73,7 +74,7 @@ export async function listPrototypeExports(user: User, id: string): Promise<Expo
 }
 
 export async function createPrototypeExport(user: User, id: string, version: number, form: FormData) {
-  if (!uuid.safeParse(id).success || !Number.isInteger(version) || version < 1) throw new WorkflowError("Invalid intake or approved version.", "invalid");
+  if (!uuid.safeParse(id).success || !Number.isInteger(version) || version < 1) throw new WorkflowError("Invalid referral or approved version.", "invalid");
   if (form.get("synthetic") !== "yes") throw new WorkflowError("Confirm that all information is synthetic.", "invalid");
   const codebook = await loadRedcapCodebook();
   if (form.get("codebookHash") !== codebook.hash) throw new WorkflowError("The codebook changed. Reload the form before generating the prototype.", "conflict");
@@ -85,7 +86,8 @@ export async function createPrototypeExport(user: User, id: string, version: num
        FROM submissions s WHERE s.id=$1 FOR UPDATE`, [id]);
     const row = result.rows[0];
     if (!row || !canReview(user, row.group_id)) throw new WorkflowError("Record not found or not available.", "missing");
-    if (row.review_state !== "approved" || row.status === "archived" || row.removed_at || row.version !== version) throw new WorkflowError("The intake is no longer currently approved or has a newer approved version. Reload the intake.", "conflict");
+    if (row.review_state !== "approved" || row.status === "archived" || row.removed_at || row.version !== version) throw new WorkflowError("The referral is no longer currently approved or has a newer approved version. Reload the referral.", "conflict");
+    await requireConsent(client, id);
     const exportId = randomUUID();
     await client.query("INSERT INTO redcap_prototype_exports(id,submission_id,approved_version,payload,created_by) VALUES ($1,$2,$3,$4,$5)", [exportId, id, version, JSON.stringify(payload), user.id]);
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields) VALUES ($1,'redcap_prototype_create',$2,$3)", [user.id, id, [exportId]]);

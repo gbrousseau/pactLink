@@ -6,22 +6,23 @@ import { searchSchema } from "../src/lib/submissions";
 
 const user: User = { id: "test", display_name: "Test", role: "editor", group_id: "north", group_name: "North" };
 function valid(): Answers {
-  return { name: "Synthetic Participant", dob: "1990-01-01", programType: "Deflection", date: "2026-01-01", navigator: "Demo Navigator" };
+  return { name: "Synthetic Participant", dob: "1990-01-01", programType: "Law Enforcement Deflection", date: "2026-01-01", navigator: "Demo Navigator" };
 }
 describe("Intake validation", () => {
   it("maps the packet's 34 intake questions", () => {
     expect(intakeFields).toHaveLength(34);
     expect(intakeFields.map((f) => f.key)).toContain("emergencyPhone");
   });
-  it("allows incomplete drafts but requires identity and program for submission", () => {
+  it("allows incomplete drafts and requires Intake fields, not consent identity, for submission", () => {
     expect(validateAnswers({}, false)).toEqual({});
-    expect(validateAnswers({}, true)).toHaveProperty("name");
+    expect(validateAnswers({}, true)).toHaveProperty("programType");
+    expect(validateAnswers({}, true)).not.toHaveProperty("name");
     expect(validateAnswers(valid(), true)).toEqual({});
   });
   it("flags unanswered questions by section, ignores inactive conditional questions, and clears answered flags", () => {
     const empty = getIntakeCompleteness({});
     expect(empty.totalMissing).toBeGreaterThan(0);
-    expect(empty.missingBySection[0]).toContain("name");
+    expect(empty.missingBySection[0]).not.toContain("name");
     expect(empty.missingBySection[3]).toContain("qualified");
     expect(empty.missingBySection[3]).not.toContain("disqualification");
     const filled: Answers = {};
@@ -41,9 +42,9 @@ describe("Intake validation", () => {
     expect(getIntakeCompleteness({ gender: ["Other"], genderOther: "Self described" }).missingBySection[0]).not.toContain("genderOther");
   });
   it("rejects invalid dates and dates after today", () => {
-    expect(validateAnswers({ ...valid(), dob: "2026-02-30" }, true)).toHaveProperty("dob");
     expect(validateAnswers({ ...valid(), contactDate: "2099-01-01" }, false)).toHaveProperty("contactDate");
     expect(validateAnswers({ ...valid(), contactDate: "1980-01-01" }, false)).toHaveProperty("contactDate");
+    expect(validateAnswers({ contactDate: "1980-01-01" }, false, "2026-01-01", "1990-01-01")).toHaveProperty("contactDate");
   });
   it("rejects forged choices and unknown answer keys", () => {
     expect(validateAnswers({ ...valid(), programType: "invented" }, true)).toHaveProperty("programType");
@@ -63,7 +64,7 @@ describe("Intake validation", () => {
     const form = new FormData();
     form.set("name", "  Synthetic Name  "); form.append("race", "White"); form.append("race", "Hispanic or Latino");
     const answers = parseFormAnswers(form);
-    expect(answers.name).toBe("Synthetic Name");
+    expect(answers.name).toBeUndefined();
     expect(answers.race).toEqual(["White", "Hispanic or Latino"]);
     expect(answers.qualified).toBe("");
   });

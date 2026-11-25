@@ -9,7 +9,7 @@ export type IntakeField = {
 };
 export type IntakeSection = { title: string; description: string; fields: IntakeField[] };
 
-export const programs = ["Conditional Discharge", "Deflection", "Active Outreach Referral"] as const;
+export const programs = ["Conditional Discharge", "Law Enforcement Deflection", "Active Outreach Deflection Referral"] as const;
 const unknown = "Don't know";
 const yesNo = ["Yes", "No", unknown];
 export const housingOptions = [
@@ -26,7 +26,7 @@ export const housingOptions = [
   "Jail/correctional facility", "Other", unknown,
 ] as const;
 
-export const intakeSections: IntakeSection[] = [
+const historicalSections: IntakeSection[] = [
   {
     title: "Participant",
     description: "Program and participant identity. Answer every applicable question before requesting review; drafts may be incomplete.",
@@ -56,7 +56,7 @@ export const intakeSections: IntakeSection[] = [
   },
   {
     title: "Housing and basic needs",
-    description: "Capture the situation at intake. Unknown and unanswered are stored separately.",
+    description: "Capture the situation at referral. Unknown and unanswered are stored separately.",
     fields: [
       { key: "housing", label: "Housing situation at time of deflection", type: "multi", options: housingOptions },
       { key: "housingStable", label: "Is the housing situation stable?", type: "single", options: yesNo },
@@ -143,6 +143,14 @@ export const intakeSections: IntakeSection[] = [
   },
 ];
 
-export const intakeFields = intakeSections.flatMap((section) => section.fields);
+export const intakeFields = historicalSections.flatMap((section) => section.fields);
+export const consentMovedKeys = ["name", "dob", "phone", "emergencyName", "emergencyPhone", "signatureName"] as const;
+export const intakeSections = historicalSections.map((section) => ({
+  ...section,
+  title: section.title === "Contact and attestation" ? "Intake details" : section.title,
+  description: section.title === "Contact and attestation" ? "Record the intake date and program navigator." : section.description,
+  fields: section.fields.filter((field) => !consentMovedKeys.some((key) => key === field.key)),
+}));
+export const visibleIntakeFields = intakeSections.flatMap((section) => section.fields);
 export const otherOption = (field: IntakeField) =>
   field.options?.find((option) => ["Other", "Different Race", "Different Term"].includes(option));

@@ -11,11 +11,11 @@ export default async function Login() {
     <div className="w-full max-w-lg">
       <div className="mb-8 flex items-center gap-3"><ShieldCheck className="text-teal-800" size={38} /><div>
         <h1 className="text-2xl font-bold tracking-tight">Deflection Workspace</h1>
-        <p className="mt-1 text-sm text-slate-500">Clackamas County · Development intake pilot</p>
+        <p className="mt-1 text-sm text-slate-500">Clackamas County · Development referral pilot</p>
       </div></div>
       <section className="panel">
-        <h2 className="mb-2 text-xl font-bold">Welcome to the intake pilot</h2>
-        <p className="mb-6 text-sm leading-6 text-slate-500">Create and manage intake records in an access-controlled workspace.</p>
+        <h2 className="mb-2 text-xl font-bold">Welcome to the referral pilot</h2>
+        <p className="mb-6 text-sm leading-6 text-slate-500">Create and manage referral records in an access-controlled workspace.</p>
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
           <strong>Synthetic data only.</strong> This prototype is not CJIS approved and must not contain real participant, legal, or health information.
         </div>
