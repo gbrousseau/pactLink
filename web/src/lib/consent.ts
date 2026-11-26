@@ -76,6 +76,11 @@ export async function submitConsent(user: User, input: ConsentInput, document: B
     const row = result.rows[0];
     if (!row || !canView(user, row.group_id)) throw new WorkflowError("Record not found or not available to your group.", "missing");
     if (!canEdit(user, row.group_id)) throw new WorkflowError("You do not have editing permission.", "forbidden");
+    const owner = await client.query<{ created_by: string }>(
+      "SELECT created_by FROM consent_versions WHERE submission_id=$1 ORDER BY version LIMIT 1", [submissionId]);
+    if (owner.rows[0] && user.role !== "admin" && owner.rows[0].created_by !== user.id) {
+      throw new WorkflowError("Only the original consent submitter or an administrator can correct consent.", "forbidden");
+    }
     if (id && row.revision !== revision) throw new WorkflowError("Another user changed this record. Reload before submitting consent.", "conflict");
     if (row.removed_at || row.status === "archived") throw new WorkflowError("Restore the record before submitting consent.", "invalid");
     const value = parsed.data;
@@ -104,7 +109,9 @@ export async function listConsent(user: User, id: string): Promise<ConsentVersio
     to_char(c.date_of_birth,'YYYY-MM-DD') AS date_of_birth,c.address,c.phone,c.email,c.emergency_name,c.emergency_phone,c.review_note,
     (c.document IS NOT NULL) AS has_document,c.created_at,u.display_name
     FROM consent_versions c JOIN submissions s ON s.id=c.submission_id JOIN app_users u ON u.id=c.created_by
-    WHERE s.id=$1 AND ($2 OR (s.group_id=$3 AND s.removed_at IS NULL)) ORDER BY c.version DESC`, [id, user.role === "admin", user.group_id]);
+    WHERE s.id=$1 AND ($2 OR (s.group_id=$3 AND s.removed_at IS NULL AND
+      (SELECT owner.created_by FROM consent_versions owner WHERE owner.submission_id=s.id ORDER BY owner.version LIMIT 1)=$4))
+    ORDER BY c.version DESC`, [id, user.role === "admin", user.group_id, user.id]);
   return result.rows;
 }
 
@@ -112,8 +119,9 @@ export async function downloadConsent(user: User, id: string, version: number): 
   if (!z.uuid().safeParse(id).success || !Number.isInteger(version) || version < 1) throw new WorkflowError("Invalid document.", "invalid");
   return transaction(async (client) => {
     const result = await client.query<{ document: Buffer }>(`SELECT c.document FROM consent_versions c JOIN submissions s ON s.id=c.submission_id
-      WHERE s.id=$1 AND c.version=$2 AND c.document IS NOT NULL AND ($3 OR (s.group_id=$4 AND s.removed_at IS NULL))`,
-    [id, version, user.role === "admin", user.group_id]);
+      WHERE s.id=$1 AND c.version=$2 AND c.document IS NOT NULL AND ($3 OR (s.group_id=$4 AND s.removed_at IS NULL AND
+        (SELECT owner.created_by FROM consent_versions owner WHERE owner.submission_id=s.id ORDER BY owner.version LIMIT 1)=$5))`,
+    [id, version, user.role === "admin", user.group_id, user.id]);
     if (!result.rows[0]) throw new WorkflowError("Document not found or not available.", "missing");
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields) VALUES ($1,'consent_download',$2,$3)", [user.id, id, [`version_${version}`]]);
     return result.rows[0].document;

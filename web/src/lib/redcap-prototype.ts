@@ -4,32 +4,24 @@ import { canReview, WorkflowError, type User } from "./access";
 import { database, transaction } from "./db";
 import { loadRedcapCodebook, type RedcapCodebook } from "./redcap-codebook";
 import { requireConsent } from "./consent";
+import type { PoolClient } from "pg";
+import { answersSchema } from "./intake-validation";
+import { screeningServicesSchema } from "./screening-service-schema";
+import { completionSchema } from "./program-completion-schema";
+import type { PrefillSources } from "./redcap-prefill";
 
 export type PrototypeValues = Record<string, string | string[]>;
 type ExportRow = { id: string; approved_version: number; created_at: Date; display_name: string; removed_at: Date | null };
 const uuid = z.uuid();
-
-export function prefillPrototype(answers: Record<string, string | string[]>, codebook: RedcapCodebook): PrototypeValues {
-  const values: PrototypeValues = {};
-  for (const [source, target] of [["dob", "dob"], ["contactDate", "first_contact_date"], ["eligibilityDate", "elig_date"]] as const) {
-    if (typeof answers[source] === "string" && answers[source]) values[target] = answers[source];
-  }
-  for (const [source, target] of [
-    ["race", "race"], ["gender", "gender"], ["disability", "disability"],
-    ["handoff", "handoff_type"], ["eligibilityBy", "eligibility_determined_by"], ["charges", "charge"],
-  ] as const) {
-    const answersForField = answers[source];
-    const field = codebook.fields.find((item) => item.name === target && item.type === "checkbox");
-    if (!Array.isArray(answersForField) || !answersForField.length || !field) continue;
-    const choices = answersForField.map((answer) => field.choices.find((choice) => choice.label === answer)?.code);
-    if (choices.every((choice): choice is string => choice !== undefined)) values[target] = choices;
-  }
-  return values;
-}
+export const consentIdentityFields = ["first_name", "first_name_2", "middle_name", "middle_name_2", "last_name", "last_name_2", "dob", "dob_2"] as const;
 
 export function prototypePayload(codebook: RedcapCodebook, input: FormData) {
+  if (consentIdentityFields.some((name) => input.getAll(name).some((value) => typeof value !== "string" || value.trim()))) {
+    throw new WorkflowError("Identity fields are restricted to consent and cannot be included in this prototype.", "forbidden");
+  }
   const record: Record<string, string> = {};
   for (const field of codebook.fields) {
+    if (consentIdentityFields.some((name) => name === field.name)) continue;
     const raw = input.getAll(field.name);
     if (raw.some((value) => typeof value !== "string")) throw new WorkflowError("File uploads are not allowed.", "invalid");
     const values = raw as string[];
@@ -45,15 +37,57 @@ export function prototypePayload(codebook: RedcapCodebook, input: FormData) {
       if (value) record[field.name] = value;
     }
   }
-  if (record.id && record.id.length > 100) throw new WorkflowError("The synthetic REDCap record ID must be at most 100 characters.", "invalid");
-  if (formValue(input, "confirmRecordId") !== (record.id ?? "")) throw new WorkflowError("The record ID and confirmation do not match.", "invalid");
   return { warning: "SYNTHETIC PROTOTYPE ONLY - NOT VALIDATED FOR REDCAP IMPORT", codebook_sha256: codebook.hash, record };
 }
 
 function formValue(input: FormData, name: string) {
   const entries = input.getAll(name);
-  if (entries.length > 1 || (entries.length === 1 && typeof entries[0] !== "string")) throw new WorkflowError("Confirm the synthetic record ID.", "invalid");
+  if (entries.length > 1 || (entries.length === 1 && typeof entries[0] !== "string")) throw new WorkflowError(`Invalid ${name}.`, "invalid");
   return typeof entries[0] === "string" ? entries[0].trim() : "";
+}
+
+async function lockedSources(client: PoolClient, user: User, id: string): Promise<PrefillSources> {
+  const locked = await client.query<{ group_id: string; review_state: string; status: string; removed_at: Date | null }>(
+    "SELECT group_id,review_state,status,removed_at FROM submissions WHERE id=$1 FOR UPDATE", [id]);
+  const row = locked.rows[0];
+  if (!row || !canReview(user, row.group_id)) throw new WorkflowError("Record not found or not available.", "missing");
+  if (row.review_state !== "approved" || row.status === "archived" || row.removed_at) {
+    throw new WorkflowError("The referral is no longer currently approved. Reload the referral.", "conflict");
+  }
+  await requireConsent(client, id);
+  const result = await client.query<{
+    participant_id: string; intake_version: number | null; intake_answers: unknown;
+    screening_state: string | null; screening_version: number | null; screening_answers: unknown;
+    completion_state: string | null; completion_version: number | null; completion_answers: unknown;
+  }>(`SELECT e.participant_id, i.version AS intake_version, i.answers AS intake_answers,
+      sr.review_state AS screening_state, sa.version AS screening_version, sa.answers AS screening_answers,
+      cr.review_state AS completion_state, ca.version AS completion_version, ca.answers AS completion_answers
+    FROM submissions s JOIN enrollments e ON e.id=s.enrollment_id
+    LEFT JOIN LATERAL (SELECT version,answers FROM approved_intake_versions WHERE submission_id=s.id ORDER BY version DESC LIMIT 1) i ON true
+    LEFT JOIN screening_service_records sr ON sr.submission_id=s.id
+    LEFT JOIN LATERAL (SELECT version,answers FROM screening_service_approvals WHERE submission_id=s.id ORDER BY version DESC LIMIT 1) sa ON true
+    LEFT JOIN program_completion_records cr ON cr.submission_id=s.id
+    LEFT JOIN LATERAL (SELECT version,answers FROM program_completion_approvals WHERE submission_id=s.id ORDER BY version DESC LIMIT 1) ca ON true
+    WHERE s.id=$1`, [id]);
+  const source = result.rows[0];
+  if (!source?.intake_version || (source.screening_state === "approved" && !source.screening_version)
+      || (source.completion_state === "approved" && !source.completion_version)) {
+    throw new WorkflowError("An approved source snapshot is missing.", "invalid");
+  }
+  const screening = source.screening_state === "approved" && source.screening_version
+    ? { version: source.screening_version, answers: screeningServicesSchema.parse(source.screening_answers) } : null;
+  const completion = screening && source.completion_state === "approved" && source.completion_version
+    ? { version: source.completion_version, answers: completionSchema.parse(source.completion_answers) } : null;
+  return {
+    participantId: source.participant_id,
+    intake: { version: source.intake_version, answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])).parse(answersSchema.parse(source.intake_answers)) },
+    screening, completion,
+  };
+}
+
+export async function getPrototypeSources(user: User, id: string): Promise<PrefillSources> {
+  if (!uuid.safeParse(id).success) throw new WorkflowError("Invalid referral identifier.", "invalid");
+  return transaction((client) => lockedSources(client, user, id));
 }
 
 async function permitted(user: User, id: string) {
@@ -80,16 +114,19 @@ export async function createPrototypeExport(user: User, id: string, version: num
   if (form.get("codebookHash") !== codebook.hash) throw new WorkflowError("The codebook changed. Reload the form before generating the prototype.", "conflict");
   const payload = prototypePayload(codebook, form);
   return transaction(async (client) => {
-    const result = await client.query<{ group_id: string; review_state: string; status: string; removed_at: Date | null; version: number | null }>(
-      `SELECT s.group_id,s.review_state,s.status,s.removed_at,
-       (SELECT max(v.version) FROM approved_intake_versions v WHERE v.submission_id=s.id) AS version
-       FROM submissions s WHERE s.id=$1 FOR UPDATE`, [id]);
-    const row = result.rows[0];
-    if (!row || !canReview(user, row.group_id)) throw new WorkflowError("Record not found or not available.", "missing");
-    if (row.review_state !== "approved" || row.status === "archived" || row.removed_at || row.version !== version) throw new WorkflowError("The referral is no longer currently approved or has a newer approved version. Reload the referral.", "conflict");
-    await requireConsent(client, id);
+    const sources = await lockedSources(client, user, id);
+    if (sources.intake.version !== version
+      || formValue(form, "screeningVersion") !== String(sources.screening?.version ?? "none")
+      || formValue(form, "completionVersion") !== String(sources.completion?.version ?? "none")) {
+      throw new WorkflowError("An approved source phase changed. Reload the form before generating the prototype.", "conflict");
+    }
+    if (formValue(form, "id") !== sources.participantId) throw new WorkflowError("The participant record ID cannot be changed.", "invalid");
+    payload.record.id = sources.participantId;
+    const storedPayload = { ...payload, source_versions: {
+      intake: sources.intake.version, screening: sources.screening?.version ?? null, completion: sources.completion?.version ?? null,
+    } };
     const exportId = randomUUID();
-    await client.query("INSERT INTO redcap_prototype_exports(id,submission_id,approved_version,payload,created_by) VALUES ($1,$2,$3,$4,$5)", [exportId, id, version, JSON.stringify(payload), user.id]);
+    await client.query("INSERT INTO redcap_prototype_exports(id,submission_id,approved_version,payload,created_by) VALUES ($1,$2,$3,$4,$5)", [exportId, id, version, JSON.stringify(storedPayload), user.id]);
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields) VALUES ($1,'redcap_prototype_create',$2,$3)", [user.id, id, [exportId]]);
     return exportId;
   });
@@ -120,6 +157,11 @@ export async function downloadPrototype(user: User, id: string, exportId: string
        WHERE s.id=$1 AND e.id=$2 FOR UPDATE OF s,e`, [id, exportId]);
     const row = result.rows[0];
     if (!row || !canReview(user, row.group_id) || row.removed_at) throw new WorkflowError("File not found or not available.", "missing");
+    const payload = z.object({ record: z.record(z.string(), z.string()) }).passthrough().safeParse(row.payload);
+    if (!payload.success) throw new WorkflowError("The stored prototype has an invalid format.", "invalid");
+    if (consentIdentityFields.some((name) => payload.data.record[name])) {
+      throw new WorkflowError("This older prototype contains restricted identity fields and cannot be downloaded.", "forbidden");
+    }
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields) VALUES ($1,'redcap_prototype_download',$2,$3)", [user.id, id, [exportId]]);
     return JSON.stringify(row.payload, null, 2) + "\n";
   });

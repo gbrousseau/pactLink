@@ -5,6 +5,7 @@ import { AlertCircle, ChevronLeft, ChevronRight, Save } from "lucide-react";
 import { saveIntakeAction } from "@/app/actions";
 import { intakeSections, otherOption, type IntakeField } from "@/lib/intake-fields";
 import { getIntakeCompleteness, type Answers } from "@/lib/intake-validation";
+import { CollapsibleSection } from "./collapsible-section";
 
 export function IntakeForm({ initial = {}, id, revision }: {
   initial?: Answers; id?: string; revision?: number;
@@ -87,12 +88,15 @@ export function IntakeForm({ initial = {}, id, revision }: {
         <button type="button" className="underline" onClick={() => {
           const index = intakeSections.findIndex((s) => s.fields.some((f) => f.key === key || `${f.key}Other` === key));
           if (index >= 0) setStep(index);
-          setTimeout(() => document.getElementById(key)?.focus(), 0);
+          setTimeout(() => {
+            const section = document.getElementById(`intake-section-${index}`);
+            if (section instanceof HTMLDetailsElement) section.open = true;
+            document.getElementById(key)?.focus();
+          }, 0);
         }}>{state.errors?.[key]}</button>
       </li>)}</ul>}
     </div>}
-    {intakeSections.map((section, index) => <section key={section.title} hidden={step !== index} className="panel">
-      <h2 className="text-xl font-bold">{section.title}</h2>
+    {intakeSections.map((section, index) => <CollapsibleSection key={section.title} id={`intake-section-${index}`} title={section.title} hidden={step !== index}>
       <p className="mb-6 mt-2 text-sm leading-6 text-slate-500">{section.description}</p>
       <div className="space-y-7">{section.fields.map((field) => {
         const conditionalHidden = !!field.when && answers[field.when.key] !== field.when.value;
@@ -141,12 +145,10 @@ export function IntakeForm({ initial = {}, id, revision }: {
           </div>}
         </div>;
       })}</div>
-    </section>)}
-    {review && <section className="panel">
-      <h2 className="text-xl font-bold">Review referral</h2>
+    </CollapsibleSection>)}
+    {review && <CollapsibleSection title="Review referral">
       <p className="mb-6 mt-2 text-sm text-slate-500">Review answers before saving. A different reviewer must approve the saved draft; this is not a participant signature.</p>
-      {intakeSections.map((section) => <div key={section.title} className="mb-6">
-        <h3 className="mb-3 border-b border-slate-200 pb-2 font-semibold text-teal-900">{section.title}</h3>
+      {intakeSections.map((section) => <CollapsibleSection key={section.title} title={section.title} level={3} className="mb-6 border-b border-slate-200 pb-2 text-teal-900" contentClassName="mt-3">
         <dl className="grid gap-3">{section.fields.filter((field) => !field.when || answers[field.when.key] === field.when.value).map((field) => {
           const missing = completeness.missingBySection[intakeSections.indexOf(section)].includes(field.key);
           const needsOther = !!otherOption(field) && (Array.isArray(answers[field.key]) ? answers[field.key].includes(otherOption(field)!) : answers[field.key] === otherOption(field))
@@ -156,14 +158,14 @@ export function IntakeForm({ initial = {}, id, revision }: {
             {answers[`${field.key}Other`] && ` (${answers[`${field.key}Other`]})`}
             {needsOther && <span className="ml-2 font-semibold text-rose-700">Specify other answer</span>}</dd>
         </div>;})}</dl>
-      </div>)}
+      </CollapsibleSection>)}
       <label className="block text-sm font-semibold">Note for reviewer (optional)
         <textarea name="reviewNote" className="input mt-2" rows={4} maxLength={2000}
           value={typeof answers.reviewNote === "string" ? answers.reviewNote : ""}
           onChange={(event) => set("reviewNote", event.target.value)} />
         <span className="mt-1 block text-xs font-normal text-slate-500">Share context about this Intake submission. Visible to users who can review this referral.</span>
       </label>
-    </section>}
+    </CollapsibleSection>}
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex gap-2">
         <button type="button" disabled={step === 0} className="btn-secondary" onClick={() => setStep(step - 1)}><ChevronLeft size={16} />Back</button>

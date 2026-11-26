@@ -5,7 +5,7 @@ import { WorkflowError, type User } from "./access";
 import { database, transaction } from "./db";
 
 type BatchRow = {
-  id: string; row_number: number; revision: number; participant_name: string;
+  id: string; row_number: number; revision: number; participant_id: string | null;
   status: string; review_state: string; legal_hold: boolean; removed_at: Date | null;
 };
 export type BatchPreview = { rows: BatchRow[]; token: string };
@@ -31,7 +31,10 @@ function preview(rows: BatchRow[]): BatchPreview {
 }
 async function batchRows(client: PoolClient, batch: string, lock: boolean) {
   return (await client.query<BatchRow>(
-    `SELECT s.id,i.row_number,s.revision,s.participant_name,s.status,s.review_state,s.legal_hold,s.removed_at
+    `SELECT s.id,i.row_number,s.revision,
+       CASE WHEN EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id)
+         THEN (SELECT e.participant_id FROM enrollments e WHERE e.id=s.enrollment_id) END AS participant_id,
+       s.status,s.review_state,s.legal_hold,s.removed_at
      FROM intake_import_sources i JOIN submissions s ON s.id=i.submission_id
      WHERE i.batch_id=$1 ORDER BY i.row_number ${lock ? "FOR UPDATE OF s" : ""}`, [batch],
   )).rows;

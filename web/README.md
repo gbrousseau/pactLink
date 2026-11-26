@@ -121,16 +121,18 @@ Next.js Server Actions enforce same-origin requests.
   middle name and emergency contact information are optional. A synthetic PDF
   is optional, up to 4 MiB. PDF checks are basic format checks, not malware
   scanning or signature verification. A correction creates a new immutable
-  version; earlier values and any earlier PDF remain available to authorized
-  group viewers and administrators. Downloads are audited. A version without
-  a PDF does not copy an earlier PDF.
+  version; earlier values and PDFs are visible only to the original Consent
+  submitter and administrators. Corrections require editing permission as well.
+  Downloads are audited. A version without a PDF does not copy an earlier PDF.
 - Staff checkboxes are attestations only; the app does not verify a signature
   or establish legal consent. Consent withdrawal and invalidation are not
   implemented, so this workflow must not be used for real participants.
 - Consent unlocks phase 2 Intake. Historical and imported records remain
   consent-unverified until a new consent version is submitted. Their original
   answers and approved snapshots are retained; corrections do not invalidate
-  earlier Intake approvals. Name and DOB searches use the latest Consent.
+  earlier Intake approvals. Name searches match the latest Consent only when
+  the searcher is the original Consent submitter or an administrator; DOB
+  search and sorting by name or DOB are unavailable.
   Consent is required for Intake changes, review and new REDCap prototypes.
   Each Consent version can include an optional note for the reviewer.
 - Phase 3 Screening and Services unlocks after current Intake approval. It
@@ -154,13 +156,14 @@ Next.js Server Actions enforce same-origin requests.
   completed the program. Consent and all three later phases include optional
   reviewer notes retained in their respective versions. Real reporting
   definitions and reports based on these records remain unimplemented.
-- A **synthetic REDCap JSON prototype**, available to reviewers and
+- **REDCap data preparation** creates a synthetic JSON prototype, available to reviewers and
   administrators for an active, currently approved Intake. It uses only an
-  immutable approved snapshot for prefill; ambiguous names and choices require
-  manual entry. Additional answers are not separately reviewed or approved.
-  The synthetic record ID is optional: when blank, it is omitted from the JSON;
-  an entered ID requires confirmation. REDCap's ID assignment and import
-  behavior have not been verified for the target project.
+  immutable, currently approved Intake, Screening and Services, and Program
+  Completion snapshots for prefill. Source versions are recorded with each
+  prototype, and changes require the form to be reloaded. Identity fields are excluded and
+  ambiguous choices require manual entry. Additional answers are not separately reviewed or approved.
+  The participant UUID is used as the record ID; UUID compatibility, REDCap's
+  ID assignment and import behavior have not been verified for the target project.
   The included `../redcap.csv` is a codebook, not an import
   specification. Conditional questions are all displayed for manual review;
   branching logic, field completeness, JSON structure and REDCap compatibility
@@ -168,7 +171,8 @@ Next.js Server Actions enforce same-origin requests.
   is sent to REDCap. The application stores each generated file, audits creation,
   download, removal and restoration, and retains removed content. A legal hold
   prevents removal. Previously generated files remain available to authorized
-  reviewers and administrators if the Intake is later edited or archived.
+  reviewers and administrators if the Intake is later edited or archived,
+  except older prototypes containing restricted identity fields cannot be downloaded.
   A real project-specific import specification and security approval are
   required before any operational use.
 - A post-login dashboard with workspace shortcuts and a group-scoped synthetic
@@ -221,7 +225,14 @@ Next.js Server Actions enforce same-origin requests.
 - Conditional disqualification and Other inputs, date/option/phone validation.
 - Server-side group authorization for queries, counts, writes, and history.
 - PostgreSQL persistence, participant/enrollment references, and template version.
-- Search by participant name or enrollment ID; status/program/navigator/date filters.
+- Each new referral has a distinct participant UUID, displayed after Consent
+  submission instead of the person's name. Existing no-consent drafts show the
+  referral ID. Repeat referrals are not yet linked to an existing participant.
+  Search by participant ID, enrollment ID, or an authorized consent name;
+  status/program/navigator/date filters are also available.
+- Referral details and phase forms have expandable section headings. History
+  and approved-version sections start collapsed; active work starts open.
+  Collapsing a form section keeps its answers for saving.
 - Allowlisted sorting and 20-record server pagination.
 - Transactional edit/archive/restore operations with optimistic revisions and
   row locks. Stale edits cannot overwrite newer changes.
@@ -236,8 +247,8 @@ Next.js Server Actions enforce same-origin requests.
   supplied 25-column template into a selected group. Valid rows are saved as
   drafts; malformed-width or oversized-field records are skipped and reported.
   Malformed quoting rejects the file. The file is limited to 4 MiB and 10,000
-  data records. All original columns are retained with each record and visible
-  to users who can view that group's record; this is not approved storage for
+  data records. All original columns are retained with each record but are no
+  longer displayed in the referral view; this is not approved storage for
   actual CJI or health data.
 - Only valid, unambiguous DOBs are mapped automatically. Missing or ambiguous
   DOBs and all names use clearly labeled generated placeholders; they must be

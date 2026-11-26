@@ -27,7 +27,7 @@ export default async function BatchDetail({ params, searchParams }: { params: Pr
       <details className="panel" key={label} open={label === "Excluded or already removed" && rows.length > 0}>
         <summary className="cursor-pointer font-semibold">{label} ({rows.length})</summary>
         <ul className="mt-4 space-y-2 text-sm">{rows.map((row) => <li key={row.id} className="border-b border-slate-100 pb-2">
-          Record {row.row_number}: <Link className="text-teal-800 underline" href={`/forms/${row.id}`}>{row.participant_name || "Unnamed draft"}</Link>
+          Record {row.row_number}: <Link className="break-all text-teal-800 underline" href={`/forms/${row.id}`}>{row.participant_id ? `Participant ${row.participant_id}` : `Referral ${row.id}`}</Link>
           {" "}· {row.removed_at ? "Removed" : row.legal_hold ? "Legal hold" : row.revision !== 1 ? `Changed (revision ${row.revision})` : `${row.status}, ${row.review_state.replaceAll("_", " ")}`}
         </li>)}</ul>
       </details>)}

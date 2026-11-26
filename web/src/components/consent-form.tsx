@@ -44,7 +44,7 @@ export function ConsentForm({ id, revision, current }: { id?: string; revision?:
     <label className="block text-sm font-semibold">Note for reviewer (optional)
       <textarea className="input mt-2" name="reviewNote" rows={4} maxLength={2000} value={reviewNote}
         onChange={(event) => setReviewNote(event.target.value)} />
-      <span className="mt-1 block text-xs font-normal text-slate-500">Share context about this consent submission. Visible to users who can review this referral.</span>
+      <span className="mt-1 block text-xs font-normal text-slate-500">Share context about this consent submission. Visible only to the original consent submitter and administrators.</span>
     </label>
     <div className="flex flex-wrap gap-4"><button className="btn-primary" disabled={pending}>{pending ? "Submitting…" : "Submit consent"}</button>
       <Link href={id ? `/forms/${id}` : "/forms"} className="btn-secondary">Cancel</Link></div>

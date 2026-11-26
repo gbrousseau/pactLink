@@ -8,7 +8,7 @@ import { consentMovedKeys, programs } from "./intake-fields";
 import { requireConsent } from "./consent";
 
 export type Submission = {
-  id: string; enrollment_id: string; group_id: string; form_type: "intake";
+  id: string; enrollment_id: string; participant_id: string | null; group_id: string; form_type: "intake";
   template_version: string; status: "draft" | "submitted" | "archived";
   revision: number; answers: Answers; participant_name: string; date_of_birth: string | null;
   program_type: string | null; contact_date: string | null; navigator_name: string;
@@ -43,13 +43,16 @@ export const searchSchema = z.object({
   navigator: z.string().trim().max(100).default(""),
   from: z.union([z.literal(""), isoDate]).default(""),
   to: z.union([z.literal(""), isoDate]).default(""),
-  sort: z.enum(["updated", "created", "name", "dob", "contact"]).default("updated"),
+  sort: z.enum(["updated", "created", "participant", "contact"]).default("updated"),
   direction: z.enum(["asc", "desc"]).default("desc"),
   page: z.coerce.number().int().min(1).max(100000).default(1),
 }).refine((input) => !input.from || !input.to || input.from <= input.to, { message: "Start date must not follow end date.", path: ["from"] });
 export type Search = z.infer<typeof searchSchema>;
-const sortColumns = { updated: "GREATEST(s.updated_at, r.updated_at, p.updated_at)", created: "s.created_at", name: "s.participant_name", dob: "s.date_of_birth", contact: "s.contact_date" };
-const selectColumns = "s.*, to_char(s.date_of_birth,'YYYY-MM-DD') AS date_of_birth, to_char(s.contact_date,'YYYY-MM-DD') AS contact_date, EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id) AS has_consent";
+const sortColumns = { updated: "GREATEST(s.updated_at, r.updated_at, p.updated_at)", created: "s.created_at", participant: "(SELECT e.participant_id FROM enrollments e WHERE e.id=s.enrollment_id)", contact: "s.contact_date" };
+const selectColumns = `s.*, to_char(s.date_of_birth,'YYYY-MM-DD') AS date_of_birth, to_char(s.contact_date,'YYYY-MM-DD') AS contact_date,
+  EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id) AS has_consent,
+  CASE WHEN EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id)
+    THEN (SELECT e.participant_id FROM enrollments e WHERE e.id=s.enrollment_id) END AS participant_id`;
 const text = (answers: Answers, key: string) => typeof answers[key] === "string" ? answers[key] : "";
 
 async function audit(client: PoolClient, user: User, action: string, id: string | null, fields: string[] = [], revision: number | null = null) {
@@ -238,7 +241,15 @@ export async function listSubmissions(user: User, input: Search) {
   const clauses = ["($1 OR s.group_id=$2)"];
   const add = (clause: string, value: string) => { values.push(value); clauses.push(clause.replaceAll("?", `$${values.length}`)); };
   const escaped = (value: string) => `%${value.replace(/[\\%_]/g, "\\$&")}%`;
-  if (search.q) add("(s.participant_name ILIKE ? OR s.enrollment_id::text ILIKE ?)", escaped(search.q));
+  if (search.q) {
+    values.push(user.id);
+    add(`(s.enrollment_id::text ILIKE ? OR
+    (EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id) AND
+      (SELECT e.participant_id::text FROM enrollments e WHERE e.id=s.enrollment_id) ILIKE ?) OR
+    (($1 OR (SELECT owner.created_by FROM consent_versions owner WHERE owner.submission_id=s.id ORDER BY owner.version LIMIT 1)=$3)
+      AND EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id AND c.version=(SELECT max(v.version) FROM consent_versions v WHERE v.submission_id=s.id)
+        AND concat_ws(' ',c.first_name,NULLIF(c.middle_name,''),c.last_name) ILIKE ?)))`, escaped(search.q));
+  }
   if (search.status === "removed") {
     if (user.role !== "admin") throw new WorkflowError("Only administrators can list removed imports.", "forbidden");
     clauses.push("s.removed_at IS NOT NULL");

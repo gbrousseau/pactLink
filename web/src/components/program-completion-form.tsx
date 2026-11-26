@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { saveProgramCompletionAction } from "@/app/actions";
 import { completionSections, type CompletionAnswers } from "@/lib/program-completion-schema";
+import { CollapsibleSection } from "./collapsible-section";
 
 export function ProgramCompletionForm({ id, revision, initial }: { id: string; revision?: number; initial: CompletionAnswers }) {
   const [state, action, pending] = useActionState(saveProgramCompletionAction, {});
@@ -13,8 +14,7 @@ export function ProgramCompletionForm({ id, revision, initial }: { id: string; r
     <input type="hidden" name="revision" value={revision ?? ""} />
     <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Synthetic data only. Name and date of birth are captured in Consent. Leave unanswered items blank; the reviewer should assess completeness.</p>
     {state.error && <p role="alert" className="error-box">{state.error}</p>}
-    {completionSections.map((section) => <section key={section.title} className="panel space-y-7">
-      <h2 className="text-xl font-bold">{section.title}</h2>
+    {completionSections.map((section) => <CollapsibleSection key={section.title} title={section.title} contentClassName="mt-5 space-y-7">
       {section.fields.map((field) => {
         const answer = answers[field.key] ?? (field.type === "multi" ? [] : "");
         const selected = Array.isArray(answer) ? answer : answer ? [answer] : [];
@@ -48,7 +48,7 @@ export function ProgramCompletionForm({ id, revision, initial }: { id: string; r
           </label>}
         </div>;
       })}
-    </section>)}
+    </CollapsibleSection>)}
     <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save Program Completion draft"}</button>
   </form>;
 }
