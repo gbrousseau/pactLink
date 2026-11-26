@@ -16,6 +16,7 @@ const consentSchema = z.object({
   email: z.email().max(254),
   emergencyName: z.string().trim().max(200),
   emergencyPhone: z.union([z.literal(""), phone]),
+  reviewNote: z.string().trim().max(2000).default(""),
   agreed: z.literal("yes"),
   signed: z.literal("yes"),
 });
@@ -24,12 +25,12 @@ export type ConsentVersion = {
   version: number; first_name: string; middle_name: string; last_name: string;
   date_of_birth: string; address: string; phone: string; email: string;
   emergency_name: string; emergency_phone: string; has_document: boolean;
-  display_name: string; created_at: Date;
+  review_note: string; display_name: string; created_at: Date;
 };
 
 export function parseConsent(form: FormData): ConsentInput {
   const parsed = consentSchema.safeParse(Object.fromEntries(
-    ["firstName", "middleName", "lastName", "dob", "address", "phone", "email", "emergencyName", "emergencyPhone", "agreed", "signed"]
+    ["firstName", "middleName", "lastName", "dob", "address", "phone", "email", "emergencyName", "emergencyPhone", "reviewNote", "agreed", "signed"]
       .map((key) => [key, form.get(key) ?? ""]),
   ));
   if (!parsed.success) throw new WorkflowError("Complete all required consent fields with valid values and select both confirmations.", "invalid");
@@ -79,9 +80,9 @@ export async function submitConsent(user: User, input: ConsentInput, document: B
     if (row.removed_at || row.status === "archived") throw new WorkflowError("Restore the record before submitting consent.", "invalid");
     const value = parsed.data;
     await client.query(`INSERT INTO consent_versions
-      (submission_id,version,first_name,middle_name,last_name,date_of_birth,address,phone,email,emergency_name,emergency_phone,agreed_to_share,signed_attested,document,created_by)
-      VALUES ($1,(SELECT COALESCE(MAX(version),0)+1 FROM consent_versions WHERE submission_id=$1),$2,$3,$4,$5,$6,$7,$8,$9,$10,true,true,$11,$12)`,
-    [submissionId, value.firstName, value.middleName, value.lastName, value.dob, value.address, value.phone, value.email, value.emergencyName, value.emergencyPhone, document, user.id]);
+      (submission_id,version,first_name,middle_name,last_name,date_of_birth,address,phone,email,emergency_name,emergency_phone,review_note,agreed_to_share,signed_attested,document,created_by)
+      VALUES ($1,(SELECT COALESCE(MAX(version),0)+1 FROM consent_versions WHERE submission_id=$1),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,true,$12,$13)`,
+    [submissionId, value.firstName, value.middleName, value.lastName, value.dob, value.address, value.phone, value.email, value.emergencyName, value.emergencyPhone, value.reviewNote, document, user.id]);
     await client.query(`UPDATE submissions SET participant_name=$2,date_of_birth=$3,updated_by=$4,updated_at=now(),
       revision=revision+$5 WHERE id=$1`, [submissionId, [value.firstName, value.middleName, value.lastName].filter(Boolean).join(" "), value.dob, user.id, id ? 1 : 0]);
     await client.query(`UPDATE intake_import_sources SET placeholder_fields = ARRAY(
@@ -92,7 +93,7 @@ export async function submitConsent(user: User, input: ConsentInput, document: B
     if (id) await client.query(`INSERT INTO form_revisions(submission_id,revision,answers,status,actor_id)
       SELECT id,revision,answers,status,$2 FROM submissions WHERE id=$1`, [submissionId, user.id]);
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,'consent_submit',$2,$3,$4)",
-      [user.id, submissionId, ["consent_version", ...(document ? ["document"] : [])], row.revision + (id ? 1 : 0)]);
+      [user.id, submissionId, ["consent_version", ...(value.reviewNote ? ["review_note"] : []), ...(document ? ["document"] : [])], row.revision + (id ? 1 : 0)]);
     return submissionId;
   });
 }
@@ -100,7 +101,7 @@ export async function submitConsent(user: User, input: ConsentInput, document: B
 export async function listConsent(user: User, id: string): Promise<ConsentVersion[]> {
   if (!z.uuid().safeParse(id).success) return [];
   const result = await database().query<ConsentVersion>(`SELECT c.version,c.first_name,c.middle_name,c.last_name,
-    to_char(c.date_of_birth,'YYYY-MM-DD') AS date_of_birth,c.address,c.phone,c.email,c.emergency_name,c.emergency_phone,
+    to_char(c.date_of_birth,'YYYY-MM-DD') AS date_of_birth,c.address,c.phone,c.email,c.emergency_name,c.emergency_phone,c.review_note,
     (c.document IS NOT NULL) AS has_document,c.created_at,u.display_name
     FROM consent_versions c JOIN submissions s ON s.id=c.submission_id JOIN app_users u ON u.id=c.created_by
     WHERE s.id=$1 AND ($2 OR (s.group_id=$3 AND s.removed_at IS NULL)) ORDER BY c.version DESC`, [id, user.role === "admin", user.group_id]);

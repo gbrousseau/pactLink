@@ -12,6 +12,10 @@ import { getImportSource, importIntakes, parseIntakeImport } from "../src/lib/in
 import { changeImportedRemoval, eligibleForBatchUndo, getBatchPreview, getRemovalHistory, importHashState, undoImportBatch } from "../src/lib/import-removal";
 import { changePrototypeRemoval, createPrototypeExport, downloadPrototype, listPrototypeExports } from "../src/lib/redcap-prototype";
 import { loadRedcapCodebook } from "../src/lib/redcap-codebook";
+import {
+  getScreeningServices, getScreeningServiceApprovals, parseScreeningForm, reviewScreeningServices,
+  saveScreeningServices, screeningServicesSchema,
+} from "../src/lib/screening-services";
 
 const integration = process.env.TEST_DATABASE_ADMIN_URL;
 const suite = integration ? describe : describe.skip;
@@ -40,12 +44,14 @@ function completeAnswers(): Answers {
 }
 let management: Pool;
 let testName: string;
-const consent: ConsentInput = { firstName: "Synthetic", middleName: "", lastName: "Person", dob: "1990-01-01", address: "123 Example Street", phone: "503-555-0100", email: "synthetic@example.test", emergencyName: "", emergencyPhone: "", agreed: "yes", signed: "yes" };
+const consent: ConsentInput = { firstName: "Synthetic", middleName: "", lastName: "Person", dob: "1990-01-01", address: "123 Example Street", phone: "503-555-0100", email: "synthetic@example.test", emergencyName: "", emergencyPhone: "", reviewNote: "Reviewer context", agreed: "yes", signed: "yes" };
 describe("Synthetic consent validation", () => {
   it("requires identity and both confirmations, but not a PDF or optional contacts", async () => {
     const form = new FormData();
     for (const [key, value] of Object.entries(consent)) form.set(key, value);
     expect(parseConsent(form)).toEqual(consent);
+    form.delete("reviewNote");
+    expect(parseConsent(form).reviewNote).toBe("");
     expect(await consentDocument(form)).toBeNull();
     form.set("document", new File([], "undefined", { type: "application/octet-stream" }));
     expect(await consentDocument(form)).toBeNull();
@@ -103,12 +109,73 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await database().query(await readFile(new URL("../db/004-import-removal.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/005-redcap-prototype.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/006-consent.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/007-screening-services.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/008-phase-review-notes.sql", import.meta.url), "utf8"));
+  });
+  it("persists Phase 3 revisions, enforces separated review, and retains approved history", async () => {
+    const intakeAnswers = { ...completeAnswers(), reviewNote: "Please review this Intake context." };
+    const id = await saveSubmission(north, intakeAnswers);
+    await requestReview(north, id, 1);
+    await decideReview(reviewer, id, 2, "approve");
+    expect((await getApprovedVersions(north, id))[0].answers.reviewNote).toBe("Please review this Intake context.");
+    const answers = screeningServicesSchema.parse({
+      screeningTypes: ["ASAM Criteria"], substanceDisorder: "Yes",
+      reviewNote: "Please verify the services recorded.",
+      substanceIdentification: ["Self-reported"], substanceTypes: ["Alcohol"],
+      mentalHealthDisorder: "No", screeningsReceived: ["ASAM"],
+      asamCompletionDate: "2026-01-02", asamLocation: "Example clinic",
+      referralTypes: ["SUD treatment"],
+      services: { "Medically managed inpatient": { statuses: ["Referred to service", "Received service"] } },
+    });
+    await expect(saveScreeningServices(viewer, id, undefined, answers)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(saveScreeningServices(north, id, undefined, answers)).resolves.toBe(1);
+    expect((await getScreeningServices(north, id))?.answers.asamLocation).toBe("Example clinic");
+    expect((await getScreeningServices(north, id))?.answers.reviewNote).toBe("Please verify the services recorded.");
+    await expect(saveScreeningServices(north, id, undefined, answers)).rejects.toMatchObject({ code: "conflict" });
+    await reviewScreeningServices(north, id, 1, "request");
+    await expect(reviewScreeningServices(north, id, 2, "approve")).rejects.toMatchObject({ code: "forbidden" });
+    await expect(reviewScreeningServices(reviewer, id, 2, "approve")).resolves.toBeUndefined();
+    expect((await getScreeningServices(north, id))?.review_state).toBe("approved");
+    expect((await getScreeningServiceApprovals(north, id))[0]).toMatchObject({
+      version: 1, revision: 2, answers, editor_ids: [north.id], approved_by: reviewer.id,
+    });
+    expect((await getScreeningServiceApprovals(north, id))[0].answers.reviewNote).toBe("Please verify the services recorded.");
+    await saveScreeningServices(north, id, 3, screeningServicesSchema.parse({ asamLocation: "Changed synthetic location" }));
+    expect((await getScreeningServices(north, id))?.review_state).toBe("draft");
+    expect((await getScreeningServiceApprovals(north, id))[0].answers.asamLocation).toBe("Example clinic");
+    expect((await getAudit(north, id)).some((event) => event.action === "screening_services_approved")).toBe(true);
+    await expect(database().query("UPDATE screening_service_approvals SET version=8 WHERE submission_id=$1", [id])).rejects.toThrow("append-only");
+  });
+  it("blocks Phase 3 until Consent and Intake approval and rejects invalid service outcomes", async () => {
+    const noConsent = await transaction((client) => createDraft(client, north, "north", completeAnswers()));
+    await expect(saveScreeningServices(north, noConsent, undefined, {})).rejects.toMatchObject({ code: "invalid" });
+    const notApproved = await saveSubmission(north, completeAnswers());
+    await expect(saveScreeningServices(north, notApproved, undefined, {})).rejects.toMatchObject({ code: "invalid" });
+    const invalid = screeningServicesSchema.safeParse({
+      services: { Outpatient: { statuses: ["Received service", "Referred but didn't receive"] } },
+    });
+    expect(invalid.success).toBe(false);
+    const missingReason = screeningServicesSchema.safeParse({
+      services: { Outpatient: { statuses: ["Referred to service", "Referred but didn't receive"] } },
+    });
+    expect(missingReason.success).toBe(false);
+    const unReferred = screeningServicesSchema.safeParse({
+      services: { Outpatient: { statuses: ["Received service"] } },
+    });
+    expect(unReferred.success).toBe(false);
+    const form = new FormData();
+    form.append("screeningTypes", "ASAM Criteria");
+    form.append("service:Outpatient:statuses", "Referred to service");
+    form.append("service:Outpatient:statuses", "Referred but didn't receive");
+    form.append("service:Outpatient:reasons", "Waitlist was too long");
+    expect((await parseScreeningForm(form)).services.Outpatient.reasons).toEqual(["Waitlist was too long"]);
   });
   it("creates consent first, preserves versions and approvals, and authorizes downloads", async () => {
     await expect(saveIntake(north, {})).rejects.toThrow("consent");
     await expect(submitConsent(viewer, consent, null)).rejects.toMatchObject({ code: "invalid" });
     const id = await submitConsent(north, consent, null);
     expect((await listConsent(north, id))[0].has_document).toBe(false);
+    expect((await listConsent(north, id))[0].review_note).toBe("Reviewer context");
     expect(await listConsent(south, id)).toEqual([]);
     await expect(submitConsent(south, consent, null, id, 1)).rejects.toMatchObject({ code: "missing" });
     await saveIntake(north, completeAnswers(), id, 1);

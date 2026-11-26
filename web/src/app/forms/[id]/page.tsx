@@ -14,15 +14,16 @@ import { ImportedRemovalForm } from "@/components/import-removal-form";
 import { listPrototypeExports } from "@/lib/redcap-prototype";
 import { RedcapRemoval } from "@/components/redcap-removal";
 import { listConsent } from "@/lib/consent";
+import { getScreeningServices } from "@/lib/screening-services";
 
 export default async function Detail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser();
   const { id } = await params;
   const row = await getSubmission(user, id);
   if (!row) notFound();
-  const [audit, revisions, approved, decisions, contributed, importSource, consents] = await Promise.all([
+  const [audit, revisions, approved, decisions, contributed, importSource, consents, screening] = await Promise.all([
     getAudit(user, id), getRevisions(user, id), getApprovedVersions(user, id),
-    getReviewDecisions(user, id), isDraftContributor(user, id), getImportSource(user, id), listConsent(user, id),
+    getReviewDecisions(user, id), isDraftContributor(user, id), getImportSource(user, id), listConsent(user, id), getScreeningServices(user, id),
   ]);
   const edit = canEdit(user, row.group_id);
   const removalHistory = user.role === "admin" && importSource ? await getRemovalHistory(user, id) : [];
@@ -30,7 +31,10 @@ export default async function Detail({ params, searchParams }: { params: Promise
   const redcapExports = review ? await listPrototypeExports(user, id) : [];
   const missing = getIntakeCompleteness(row.answers).totalMissing;
   const canDecide = review && !contributed && row.review_requested_by !== user.id;
-  const labels = Object.fromEntries(intakeFields.flatMap((field) => [[field.key, field.label], [`${field.key}Other`, `${field.label} (other)`]]));
+  const labels = Object.fromEntries([
+    ...intakeFields.flatMap((field) => [[field.key, field.label], [`${field.key}Other`, `${field.label} (other)`]]),
+    ["reviewNote", "Note for reviewer"],
+  ]);
   const previous = approved[0]?.answers;
   const changes = previous && row.review_state !== "approved"
     ? [...new Set([...Object.keys(previous), ...Object.keys(row.answers)])]
@@ -52,11 +56,18 @@ export default async function Detail({ params, searchParams }: { params: Promise
       <ol className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <li className="rounded-lg border p-3"><strong>1. Consent</strong><p>{consents.length ? "Submitted" : "Not submitted"}</p></li>
         <li className="rounded-lg border p-3"><strong>2. Intake</strong><p>{!consents.length ? "Locked — submit consent" : row.review_state === "approved" ? "Approved" : row.review_state.replaceAll("_", " ")}</p></li>
-        <li className="rounded-lg border p-3"><strong>3. Screening and Services</strong><p>{consents.length && row.review_state === "approved" ? "Awaiting implementation and questions" : "Locked — approve Intake first"}</p></li>
-        <li className="rounded-lg border p-3"><strong>4. Program Completion</strong><p>Locked — Screening and Services must be completed and approved</p></li>
+        <li className="rounded-lg border p-3"><strong>3. Screening and Services</strong><p>{!consents.length || row.review_state !== "approved" ? "Locked — approve Intake first" : screening?.review_state.replaceAll("_", " ") ?? "Ready to begin"}</p>
+          {consents.length > 0 && row.review_state === "approved" && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/screening`}>{screening ? "Open Screening and Services" : "Enter Screening and Services"}</Link>}</li>
+        <li className="rounded-lg border p-3"><strong>4. Program Completion</strong><p>{screening?.review_state === "approved" ? "Awaiting Program Completion questions" : "Locked — approve Screening and Services first"}</p></li>
       </ol>
-      <p className="text-sm text-amber-900">Phases 3 and 4 cannot yet be completed or tracked; their questions and approval workflows are not implemented. Synthetic data only.</p>
+      <p className="text-sm text-amber-900">Program Completion is not implemented and awaits its questions. Synthetic data only.</p>
     </section>
+    {screening && <section className="panel space-y-3">
+      <h2 className="text-lg font-bold">Screening and Services</h2>
+      <p className="text-sm">Phase status: {screening.review_state.replaceAll("_", " ")} · Revision {screening.revision}</p>
+      <Link href={`/forms/${id}/screening`} className="text-sm text-teal-800 underline">View phase details and review history</Link>
+      {screening.return_reason && <p className="text-sm text-rose-800">Returned: {screening.return_reason}</p>}
+    </section>}
     <section className="panel space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold">Consent versions</h2>
         {edit && !row.removed_at && row.status !== "archived" && <Link className="btn-secondary" href={`/forms/${id}/consent`}>{consents.length ? "Correct consent" : "Submit consent"}</Link>}</div>
@@ -69,6 +80,8 @@ export default async function Detail({ params, searchParams }: { params: Promise
             ["Address", consent.address], ["Phone", consent.phone], ["Email", consent.email], ["Emergency contact", consent.emergency_name || "Not provided"],
             ["Emergency phone", consent.emergency_phone || "Not provided"], ["Sharing and signed-document confirmations", "Attested"]].map(([label, value]) =>
             <div key={label}><dt className="text-slate-500">{label}</dt><dd className="break-words">{value}</dd></div>)}
+            <div className="sm:col-span-2"><dt className="text-slate-500">Note for reviewer</dt>
+              <dd className="mt-1 whitespace-pre-wrap break-words">{consent.review_note || "No note provided."}</dd></div>
         </dl>
         <p className="mt-3 text-sm">{consent.has_document ? <a className="text-teal-800 underline" href={`/forms/${id}/consent/${consent.version}`}>Download synthetic consent PDF</a> : "No PDF stored for this version."}</p>
       </details>)}
@@ -122,6 +135,9 @@ export default async function Detail({ params, searchParams }: { params: Promise
         {" "}Approving a referral is not a participant signature or program completion.
       </p>
       {row.review_state === "legacy" && <p className="mt-3 text-sm text-amber-800">This legacy record has no verified reviewer sign-off. An editor must save it as a draft and request review.</p>}
+      {typeof row.answers.reviewNote === "string" && row.answers.reviewNote && <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+        <strong>Intake note for reviewer:</strong><p className="mt-1 whitespace-pre-wrap">{row.answers.reviewNote}</p>
+      </div>}
       {row.review_state === "returned" && row.return_reason && <div className="mt-3 rounded-lg bg-rose-50 p-4 text-sm text-rose-900">
         <strong>Returned for changes:</strong> <span className="whitespace-pre-wrap">{row.return_reason}</span>
       </div>}

@@ -1,8 +1,9 @@
 # Deflection Intake Pilot
 
-Each referral begins with Consent and then Intake. Internal identifiers,
-database tables, URLs, and original template references retain their `intake`
-names. Screening and Services and Program Completion are not yet implemented.
+Each referral begins with Consent and then Intake, followed by Screening and
+Services after Intake approval. Internal identifiers, database tables, URLs,
+and original template references retain their `intake` names. Program
+Completion is not yet implemented.
 
 Next.js App Router, TypeScript, Tailwind CSS, Zod, and PostgreSQL development/demo application.
 The Intake form is mapped from `../forms_screenshots-06.png` through
@@ -131,10 +132,23 @@ Next.js Server Actions enforce same-origin requests.
   answers and approved snapshots are retained; corrections do not invalidate
   earlier Intake approvals. Name and DOB searches use the latest Consent.
   Consent is required for Intake changes, review and new REDCap prototypes.
-- Phase 3 Screening and Services is shown as awaiting implementation after
-  Intake approval. Phase 4 Program Completion remains locked. Neither phase
-  can yet be recorded or approved; their questions and reporting definitions
-  must be supplied before end-to-end tracking is possible.
+  Each Consent version can include an optional note for the reviewer.
+- Phase 3 Screening and Services unlocks after current Intake approval. It
+  includes the screenshot-based screenings, disorder identification, diagnosis,
+  referral, ASAM date/location, and service-by-service referral/outcome/reason
+  fields. ASAM location is free text. Service statuses are validated against
+  contradictions, controlled options are server-validated, and every saved
+  revision is audited and retained. Editors can save and request review;
+  reviewers approve or return with a reason, using separation of duties.
+  Consent, Intake, and Screening and Services also have an optional note for
+  reviewer, retained with that phase's version and shown in its authorized
+  review view. Program Completion does not yet have a form or note field.
+  Participant identity is not asked again. Because the source packet marks no
+  Phase 3 question as required, it allows blank answers and leaves completeness
+  to staff review; the service matrix is explicitly optional where not referred.
+- Phase 4 Program Completion remains a visible placeholder after Phase 3
+  approval. Its questions and reporting definitions are not implemented, so
+  end-to-end program completion tracking remains unavailable.
 - A **synthetic REDCap JSON prototype**, available to reviewers and
   administrators for an active, currently approved Intake. It uses only an
   immutable approved snapshot for prefill; ambiguous names and choices require
@@ -169,6 +183,7 @@ Next.js Server Actions enforce same-origin requests.
 - Screenshot-based Intake questions across five responsive sections and review;
   identity, contact and participant attestation-name fields were moved out of
   the Intake editor, while historical snapshots preserve their original values.
+  Intake has an optional, versioned note for the reviewer.
 - An always-visible per-question and per-step completion checklist for unanswered
   questions, including conditional and "Other" answers.
 - Every create or edit saves as a draft. Editors request review of a saved draft

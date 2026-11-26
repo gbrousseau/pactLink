@@ -157,6 +157,12 @@ export function IntakeForm({ initial = {}, id, revision }: {
             {needsOther && <span className="ml-2 font-semibold text-rose-700">Specify other answer</span>}</dd>
         </div>;})}</dl>
       </div>)}
+      <label className="block text-sm font-semibold">Note for reviewer (optional)
+        <textarea name="reviewNote" className="input mt-2" rows={4} maxLength={2000}
+          value={typeof answers.reviewNote === "string" ? answers.reviewNote : ""}
+          onChange={(event) => set("reviewNote", event.target.value)} />
+        <span className="mt-1 block text-xs font-normal text-slate-500">Share context about this Intake submission. Visible to users who can review this referral.</span>
+      </label>
     </section>}
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex gap-2">

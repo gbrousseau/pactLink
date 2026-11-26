@@ -10,6 +10,7 @@ export type IntakeCompleteness = {
 };
 export const isoDate = z.iso.date();
 const answerShape: Record<string, z.ZodType> = {};
+answerShape.reviewNote = z.string().trim().max(2000).default("");
 for (const field of intakeFields) {
   answerShape[field.key] = field.type === "multi"
     ? z.array(z.string().max(250)).max(field.options?.length ?? 30).default([])
@@ -44,7 +45,9 @@ export function getIntakeCompleteness(answers: Answers): IntakeCompleteness {
 }
 
 export function parseFormAnswers(form: FormData): Answers {
-  const answers: Answers = {};
+  const reviewNote = form.get("reviewNote") ?? "";
+  if (typeof reviewNote !== "string") throw new Error("File uploads are not supported.");
+  const answers: Answers = { reviewNote: reviewNote.trim() };
   for (const field of visibleIntakeFields) {
     const value = field.type === "multi" ? form.getAll(field.key) : form.get(field.key) ?? "";
     if (Array.isArray(value)) {

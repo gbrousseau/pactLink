@@ -13,6 +13,7 @@ export function ConsentForm({ id, revision, current }: { id?: string; revision?:
     address: current?.address ?? "", phone: current?.phone ?? "", email: current?.email ?? "",
     emergencyName: current?.emergency_name ?? "", emergencyPhone: current?.emergency_phone ?? "",
   });
+  const [reviewNote, setReviewNote] = useState(current?.review_note ?? "");
   const [agreed, setAgreed] = useState(false);
   const [signed, setSigned] = useState(false);
   const fields = [
@@ -39,6 +40,11 @@ export function ConsentForm({ id, revision, current }: { id?: string; revision?:
     <label className="flex items-start gap-3 text-sm"><input type="checkbox" name="signed" value="yes" required checked={signed} onChange={(event) => setSigned(event.target.checked)} className="mt-1" />The client has signed the document. *</label>
     <label className="block text-sm font-semibold">Signed consent PDF (optional, synthetic only, maximum 4 MiB)
       <input className="input mt-2" type="file" name="document" accept="application/pdf,.pdf" />
+    </label>
+    <label className="block text-sm font-semibold">Note for reviewer (optional)
+      <textarea className="input mt-2" name="reviewNote" rows={4} maxLength={2000} value={reviewNote}
+        onChange={(event) => setReviewNote(event.target.value)} />
+      <span className="mt-1 block text-xs font-normal text-slate-500">Share context about this consent submission. Visible to users who can review this referral.</span>
     </label>
     <div className="flex flex-wrap gap-4"><button className="btn-primary" disabled={pending}>{pending ? "Submitting…" : "Submit consent"}</button>
       <Link href={id ? `/forms/${id}` : "/forms"} className="btn-secondary">Cancel</Link></div>

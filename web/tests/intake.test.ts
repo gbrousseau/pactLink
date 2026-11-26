@@ -63,10 +63,13 @@ describe("Intake validation", () => {
   it("extracts and trims form input, preserving multiple choices", () => {
     const form = new FormData();
     form.set("name", "  Synthetic Name  "); form.append("race", "White"); form.append("race", "Hispanic or Latino");
+    form.set("reviewNote", "  Please review this context.  ");
     const answers = parseFormAnswers(form);
     expect(answers.name).toBeUndefined();
+    expect(answers.reviewNote).toBe("Please review this context.");
     expect(answers.race).toEqual(["White", "Hispanic or Latino"]);
     expect(answers.qualified).toBe("");
+    expect(validateAnswers({ ...valid(), reviewNote: "x".repeat(2001) }, false)).toHaveProperty("reviewNote");
   });
 });
 describe("Access controls", () => {

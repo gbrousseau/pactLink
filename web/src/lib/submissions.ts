@@ -121,7 +121,7 @@ export async function saveSubmission(user: User, answers: Answers, id?: string, 
       }
       if (Object.keys(validateAnswers(preservedAnswers, false, undefined, dob)).length) throw new WorkflowError("Form validation failed; check dates against the consent date of birth.", "invalid");
       answers = preservedAnswers;
-      const fields = Object.keys(answers).filter((key) => JSON.stringify(old.answers[key]) !== JSON.stringify(answers[key]));
+      const fields = Object.keys(answers).filter((key) => JSON.stringify(old.answers[key] ?? "") !== JSON.stringify(answers[key]));
       const status = "draft";
       if (old.status !== status) fields.push("status");
       if (old.review_state !== "draft") fields.push("review_state");
