@@ -12,6 +12,8 @@ import { changeImportedRemoval, importHashState, undoImportBatch } from "@/lib/i
 import { changePrototypeRemoval, createPrototypeExport } from "@/lib/redcap-prototype";
 import { consentDocument, parseConsent, submitConsent } from "@/lib/consent";
 import { parseScreeningForm, reviewScreeningServices, saveScreeningServices } from "@/lib/screening-services";
+import { parseCompletionForm } from "@/lib/program-completion-schema";
+import { reviewProgramCompletion, saveProgramCompletion } from "@/lib/program-completion";
 
 export type FormState = { message?: string; errors?: FieldErrors; answers?: Answers };
 export type ActionState = { error?: string };
@@ -59,10 +61,11 @@ export async function screeningServicesAction(_: ActionState, form: FormData): P
   if (!id.success || !revision.success || !intent.success) return { error: "Invalid Screening and Services request." };
   try {
     const answers = await parseScreeningForm(form);
-    const savedRevision = await saveScreeningServices(user, id.data, revision.data || undefined, answers);
-    if (intent.data === "request") await reviewScreeningServices(user, id.data, savedRevision, "request");
+    await saveScreeningServices(user, id.data, revision.data || undefined, answers, intent.data === "request");
   } catch (error) { return { error: safeError(error) }; }
+  revalidatePath("/forms");
   revalidatePath(`/forms/${id.data}`);
+  revalidatePath(`/forms/${id.data}/screening`);
   redirect(`/forms/${id.data}?saved=1`);
 }
 export async function screeningServicesReviewAction(_: ActionState, form: FormData): Promise<ActionState> {
@@ -74,8 +77,32 @@ export async function screeningServicesReviewAction(_: ActionState, form: FormDa
   if (!parsed.success) return { error: "Invalid Screening and Services review." };
   try { await reviewScreeningServices(user, parsed.data.id, parsed.data.revision, parsed.data.intent, parsed.data.reason ?? ""); }
   catch (error) { return { error: safeError(error) }; }
+  revalidatePath("/forms");
   revalidatePath(`/forms/${parsed.data.id}`);
+  revalidatePath(`/forms/${parsed.data.id}/screening`);
   redirect(`/forms/${parsed.data.id}?saved=1`);
+}
+export async function saveProgramCompletionAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const id = z.uuid().safeParse(form.get("id"));
+  const revision = z.union([z.literal(""), z.coerce.number().int().positive()]).safeParse(form.get("revision") ?? "");
+  if (!id.success || !revision.success) return { error: "Invalid Program Completion request." };
+  try { await saveProgramCompletion(user, id.data, revision.data || undefined, parseCompletionForm(form)); }
+  catch (error) { return { error: safeError(error) }; }
+  revalidatePath(`/forms/${id.data}`);
+  redirect(`/forms/${id.data}/completion?saved=1`);
+}
+export async function reviewProgramCompletionAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const parsed = z.object({
+    id: z.uuid(), revision: z.coerce.number().int().positive(),
+    intent: z.enum(["request", "approve", "return"]), reason: z.string().max(2000).optional(),
+  }).safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: "Invalid Program Completion review request." };
+  try { await reviewProgramCompletion(user, parsed.data.id, parsed.data.revision, parsed.data.intent, parsed.data.reason ?? ""); }
+  catch (error) { return { error: safeError(error) }; }
+  revalidatePath(`/forms/${parsed.data.id}`);
+  redirect(`/forms/${parsed.data.id}/completion?saved=1`);
 }
 export async function saveIntakeAction(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();

@@ -18,6 +18,11 @@ export type Submission = {
   review_requested_by: string | null; review_requested_at: Date | null; return_reason: string | null;
   has_consent: boolean;
 };
+export type ListedSubmission = Submission & {
+  screening_review_state: "draft" | "pending_review" | "returned" | "approved" | null;
+  completion_review_state: "draft" | "pending_review" | "returned" | "approved" | null;
+  phase_updated_at: Date;
+};
 export type AuditEvent = {
   id: string; action: string; occurred_at: Date; display_name: string; changed_fields: string[]; revision: number | null;
 };
@@ -43,7 +48,7 @@ export const searchSchema = z.object({
   page: z.coerce.number().int().min(1).max(100000).default(1),
 }).refine((input) => !input.from || !input.to || input.from <= input.to, { message: "Start date must not follow end date.", path: ["from"] });
 export type Search = z.infer<typeof searchSchema>;
-const sortColumns = { updated: "updated_at", created: "created_at", name: "participant_name", dob: "date_of_birth", contact: "contact_date" };
+const sortColumns = { updated: "GREATEST(s.updated_at, r.updated_at, p.updated_at)", created: "s.created_at", name: "s.participant_name", dob: "s.date_of_birth", contact: "s.contact_date" };
 const selectColumns = "s.*, to_char(s.date_of_birth,'YYYY-MM-DD') AS date_of_birth, to_char(s.contact_date,'YYYY-MM-DD') AS contact_date, EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id) AS has_consent";
 const text = (answers: Answers, key: string) => typeof answers[key] === "string" ? answers[key] : "";
 
@@ -239,7 +244,16 @@ export async function listSubmissions(user: User, input: Search) {
     clauses.push("s.removed_at IS NOT NULL");
   } else clauses.push("s.removed_at IS NULL");
   if (search.status === "active") clauses.push("s.status<>'archived'");
-  else if (["pending_review", "returned", "approved"].includes(search.status)) add("(s.status<>'archived' AND s.review_state=?)", search.status);
+  else if (search.status === "pending_review") clauses.push(`s.status<>'archived' AND (
+    s.review_state='pending_review' OR (
+      s.review_state='approved' AND EXISTS (SELECT 1 FROM consent_versions c WHERE c.submission_id=s.id)
+      AND EXISTS (SELECT 1 FROM screening_service_records r WHERE r.submission_id=s.id AND (
+        r.review_state='pending_review' OR (r.review_state='approved' AND EXISTS (
+          SELECT 1 FROM program_completion_records p WHERE p.submission_id=s.id AND p.review_state='pending_review'
+        ))
+      ))
+    ))`);
+  else if (["returned", "approved"].includes(search.status)) add("(s.status<>'archived' AND s.review_state=?)", search.status);
   else if (search.status === "draft") clauses.push("s.status='draft' AND s.review_state='draft'");
   else if (search.status !== "all" && search.status !== "removed") add("s.status=?", search.status);
   if (search.program) add("s.program_type=?", search.program);
@@ -252,8 +266,13 @@ export async function listSubmissions(user: User, input: Search) {
   return transaction(async (client) => {
     const count = await client.query<{ count: string }>(`SELECT count(*) FROM submissions s WHERE ${where}`, values);
     const total = Number(count.rows[0].count);
-    const records = await client.query<Submission>(
-      `SELECT ${selectColumns} FROM submissions s WHERE ${where} ORDER BY ${order} LIMIT 20 OFFSET $${values.length + 1}`,
+    const records = await client.query<ListedSubmission>(
+      `SELECT ${selectColumns},
+        r.review_state AS screening_review_state, p.review_state AS completion_review_state,
+        GREATEST(s.updated_at, r.updated_at, p.updated_at) AS phase_updated_at
+       FROM submissions s LEFT JOIN screening_service_records r ON r.submission_id=s.id
+       LEFT JOIN program_completion_records p ON p.submission_id=s.id
+       WHERE ${where} ORDER BY ${order} LIMIT 20 OFFSET $${values.length + 1}`,
       [...values, (search.page - 1) * 20],
     );
     await audit(client, user, "search", null);

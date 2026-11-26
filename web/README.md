@@ -1,9 +1,9 @@
 # Deflection Intake Pilot
 
 Each referral begins with Consent and then Intake, followed by Screening and
-Services after Intake approval. Internal identifiers, database tables, URLs,
-and original template references retain their `intake` names. Program
-Completion is not yet implemented.
+Services and Program Completion after approval of the preceding phases.
+Internal identifiers, database tables, URLs, and original template references
+retain their `intake` names.
 
 Next.js App Router, TypeScript, Tailwind CSS, Zod, and PostgreSQL development/demo application.
 The Intake form is mapped from `../forms_screenshots-06.png` through
@@ -140,15 +140,20 @@ Next.js Server Actions enforce same-origin requests.
   contradictions, controlled options are server-validated, and every saved
   revision is audited and retained. Editors can save and request review;
   reviewers approve or return with a reason, using separation of duties.
-  Consent, Intake, and Screening and Services also have an optional note for
-  reviewer, retained with that phase's version and shown in its authorized
-  review view. Program Completion does not yet have a form or note field.
   Participant identity is not asked again. Because the source packet marks no
   Phase 3 question as required, it allows blank answers and leaves completeness
   to staff review; the service matrix is explicitly optional where not referred.
-- Phase 4 Program Completion remains a visible placeholder after Phase 3
-  approval. Its questions and reporting definitions are not implemented, so
-  end-to-end program completion tracking remains unavailable.
+- Phase 4 Program Completion unlocks after current Intake and Screening and
+  Services approval. It records completion or alumni status, exit dates,
+  reasons and outcomes, justice and charge disposition, housing, employment,
+  health and other information from the supplied completion form. Participant
+  identity is not collected again. Draft answers may remain blank; staff review
+  completeness. Editors request review of a saved draft, and a different
+  reviewer approves or returns it; revisions and approved snapshots are retained.
+  Phase approval means the form was reviewed, not that the participant
+  completed the program. Consent and all three later phases include optional
+  reviewer notes retained in their respective versions. Real reporting
+  definitions and reports based on these records remain unimplemented.
 - A **synthetic REDCap JSON prototype**, available to reviewers and
   administrators for an active, currently approved Intake. It uses only an
   immutable approved snapshot for prefill; ambiguous names and choices require
@@ -189,6 +194,17 @@ Next.js Server Actions enforce same-origin requests.
 - Every create or edit saves as a draft. Editors request review of a saved draft
   only after answering all applicable questions. A reviewer or administrator in
   scope can approve that exact revision or return it with a required reason.
+- The form library and referral header show the current phase and its state,
+  considering prerequisite locks. The phase list shows each phase separately.
+  The Awaiting review filter includes accessible pending reviews across all
+  three reviewed phases. Refresh to see changes made by other users.
+- Approved Intake, Screening and Services, and Program Completion phases are
+  read-only until an editor explicitly chooses to correct them. Saving an Intake
+  or Screening correction creates a draft and locks later phases until that
+  phase is reapproved. Later records and approvals are retained and become
+  available again without another review. Correcting Consent submits a new
+  version immediately; Consent has no separate review step and does not change
+  later approvals.
 - Reviewers cannot edit intakes. Reviewers and administrators cannot approve or
   return a draft they edited or submitted for review. All contributors since the
   preceding approval are considered, not just the latest editor.

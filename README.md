@@ -9,10 +9,10 @@ workflows, review, and synthetic reporting.
 > role, including administrator. Restrict access to the Render service and use
 > only fabricated data, including uploaded PDFs.
 
-The demo supports Consent (with an optional PDF), Intake and review, and
-Screening and Services after Intake approval. Program Completion remains a
-placeholder awaiting its questions and workflow, so the app cannot yet track a
-referral through program completion. Consent withdrawal is not implemented.
+The demo supports Consent (with an optional PDF), Intake, Screening and
+Services, and Program Completion, with review for the latter three phases.
+Program reporting remains illustrative and does not use these records.
+Consent withdrawal is not implemented.
 
 ## Deploy a synthetic demo to Render
 

@@ -16,6 +16,7 @@ import {
   getScreeningServices, getScreeningServiceApprovals, parseScreeningForm, reviewScreeningServices,
   saveScreeningServices, screeningServicesSchema,
 } from "../src/lib/screening-services";
+import { getProgramCompletion, getCompletionApprovals, getCompletionDecisions, reviewProgramCompletion, saveProgramCompletion } from "../src/lib/program-completion";
 
 const integration = process.env.TEST_DATABASE_ADMIN_URL;
 const suite = integration ? describe : describe.skip;
@@ -111,9 +112,64 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await database().query(await readFile(new URL("../db/006-consent.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/007-screening-services.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/008-phase-review-notes.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/009-program-completion.sql", import.meta.url), "utf8"));
+  });
+  it("gates Program Completion, preserves reviewed outcomes and notes, and enforces separated review", async () => {
+    const id = await saveSubmission(north, { ...completeAnswers(), navigator: "Completion Queue Test" });
+    await expect(saveProgramCompletion(north, id, undefined, {})).rejects.toMatchObject({ code: "invalid" });
+    await requestReview(north, id, 1);
+    await decideReview(reviewer, id, 2, "approve");
+    await expect(saveProgramCompletion(north, id, undefined, {})).rejects.toMatchObject({ code: "invalid" });
+    await saveScreeningServices(north, id, undefined, {});
+    await reviewScreeningServices(north, id, 1, "request");
+    await reviewScreeningServices(reviewer, id, 2, "approve");
+    const outcome = { completed: "No", nonCompletionReasons: ["Voluntarily left program"], housing: ["Living in a tent"], reviewNote: "Synthetic reviewer note" };
+    await expect(saveProgramCompletion(viewer, id, undefined, outcome)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(saveProgramCompletion(south, id, undefined, outcome)).rejects.toMatchObject({ code: "missing" });
+    await expect(saveProgramCompletion(north, id, undefined, outcome)).resolves.toBe(1);
+    expect(await getProgramCompletion(south, id)).toBeNull();
+    expect((await getProgramCompletion(viewer, id))?.answers).toMatchObject(outcome);
+    await expect(saveProgramCompletion(north, id, undefined, outcome)).rejects.toMatchObject({ code: "conflict" });
+    await reviewProgramCompletion(north, id, 1, "request");
+    const queue = searchSchema.parse({ status: "pending_review", navigator: "Completion Queue Test" });
+    expect((await listSubmissions(reviewer, queue)).records[0]).toMatchObject({ id, completion_review_state: "pending_review" });
+    await expect(reviewProgramCompletion(admin, id, 1, "approve")).rejects.toMatchObject({ code: "conflict" });
+    await expect(reviewProgramCompletion(north, id, 2, "approve")).rejects.toMatchObject({ code: "forbidden" });
+    await reviewProgramCompletion(reviewer, id, 2, "return", "Clarify outcome");
+    expect((await listSubmissions(reviewer, queue)).total).toBe(0);
+    expect((await getCompletionDecisions(north, id))[0]).toMatchObject({ decision: "returned", reason: "Clarify outcome" });
+    await saveProgramCompletion(north, id, 3, outcome);
+    await reviewProgramCompletion(north, id, 4, "request");
+    await reviewProgramCompletion(reviewer, id, 5, "approve");
+    expect((await getCompletionApprovals(viewer, id))[0].answers).toMatchObject(outcome);
+    expect((await getProgramCompletion(viewer, id))?.review_state).toBe("approved");
+    await saveIntake(north, completeAnswers(), id, 3);
+    await expect(saveScreeningServices(north, id, 3, {})).rejects.toMatchObject({ code: "invalid" });
+    await expect(saveProgramCompletion(north, id, 6, {})).rejects.toMatchObject({ code: "invalid" });
+    await requestReview(north, id, 4);
+    await decideReview(reviewer, id, 5, "approve");
+    expect((await getScreeningServices(north, id))?.review_state).toBe("approved");
+    expect((await getProgramCompletion(north, id))?.review_state).toBe("approved");
+    await saveScreeningServices(north, id, 3, {});
+    await expect(saveProgramCompletion(north, id, 6, {})).rejects.toMatchObject({ code: "invalid" });
+    await reviewScreeningServices(north, id, 4, "request");
+    await reviewScreeningServices(reviewer, id, 5, "approve");
+    expect((await getProgramCompletion(north, id))?.review_state).toBe("approved");
+    expect((await getCompletionApprovals(viewer, id))[0].answers).toMatchObject(outcome);
+    await saveProgramCompletion(north, id, 6, { completed: "Yes" });
+    expect((await getCompletionApprovals(north, id))[0].answers.completed).toBe("No");
+    await expect(database().query("UPDATE program_completion_approvals SET version=8 WHERE submission_id=$1", [id])).rejects.toThrow("append-only");
+    expect((await getAudit(north, id)).some((entry) => entry.action === "program_completion_approved")).toBe(true);
+    await reviewProgramCompletion(north, id, 7, "request");
+    await saveProgramCompletion(north, id, 8, { completed: "Yes", reviewNote: "Changed after request" });
+    expect((await getProgramCompletion(north, id))?.review_state).toBe("draft");
+    await expect(reviewProgramCompletion(reviewer, id, 8, "approve")).rejects.toMatchObject({ code: "conflict" });
+    await saveScreeningServices(north, id, 6, {});
+    await expect(saveProgramCompletion(north, id, 9, {})).rejects.toMatchObject({ code: "invalid" });
+    expect((await getProgramCompletion(north, id))?.answers.completed).toBe("Yes");
   });
   it("persists Phase 3 revisions, enforces separated review, and retains approved history", async () => {
-    const intakeAnswers = { ...completeAnswers(), reviewNote: "Please review this Intake context." };
+    const intakeAnswers = { ...completeAnswers(), navigator: "Screening Queue Test", reviewNote: "Please review this Intake context." };
     const id = await saveSubmission(north, intakeAnswers);
     await requestReview(north, id, 1);
     await decideReview(reviewer, id, 2, "approve");
@@ -128,14 +184,21 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
       services: { "Medically managed inpatient": { statuses: ["Referred to service", "Received service"] } },
     });
     await expect(saveScreeningServices(viewer, id, undefined, answers)).rejects.toMatchObject({ code: "forbidden" });
-    await expect(saveScreeningServices(north, id, undefined, answers)).resolves.toBe(1);
+    await expect(saveScreeningServices(north, id, undefined, answers, true)).resolves.toBe(2);
     expect((await getScreeningServices(north, id))?.answers.asamLocation).toBe("Example clinic");
     expect((await getScreeningServices(north, id))?.answers.reviewNote).toBe("Please verify the services recorded.");
     await expect(saveScreeningServices(north, id, undefined, answers)).rejects.toMatchObject({ code: "conflict" });
-    await reviewScreeningServices(north, id, 1, "request");
+    const queue = searchSchema.parse({ status: "pending_review", navigator: "Screening Queue Test" });
+    expect((await listSubmissions(reviewer, queue)).records[0]).toMatchObject({ id, screening_review_state: "pending_review" });
+    expect((await listSubmissions(southReviewer, queue)).total).toBe(0);
     await expect(reviewScreeningServices(north, id, 2, "approve")).rejects.toMatchObject({ code: "forbidden" });
     await expect(reviewScreeningServices(reviewer, id, 2, "approve")).resolves.toBeUndefined();
     expect((await getScreeningServices(north, id))?.review_state).toBe("approved");
+    expect((await listSubmissions(reviewer, queue)).total).toBe(0);
+    expect((await listSubmissions(reviewer, searchSchema.parse({ navigator: "Screening Queue Test" }))).records[0]).toMatchObject({
+      id, screening_review_state: "approved", completion_review_state: null,
+    });
+    await expect(saveProgramCompletion(north, id, undefined, { completed: "No" })).resolves.toBe(1);
     expect((await getScreeningServiceApprovals(north, id))[0]).toMatchObject({
       version: 1, revision: 2, answers, editor_ids: [north.id], approved_by: reviewer.id,
     });
@@ -145,6 +208,23 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     expect((await getScreeningServiceApprovals(north, id))[0].answers.asamLocation).toBe("Example clinic");
     expect((await getAudit(north, id)).some((event) => event.action === "screening_services_approved")).toBe(true);
     await expect(database().query("UPDATE screening_service_approvals SET version=8 WHERE submission_id=$1", [id])).rejects.toThrow("append-only");
+  });
+  it("rolls back both screening changes and review request when review auditing fails", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    await requestReview(north, id, 1);
+    await decideReview(reviewer, id, 2, "approve");
+    const saved = await saveScreeningServices(north, id, undefined, { reviewNote: "Original note" });
+    await database().query(`CREATE FUNCTION fail_screening_request_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.action='screening_services_request_review' THEN RAISE EXCEPTION 'Simulated screening request audit failure'; END IF; RETURN NEW; END; $$;
+      CREATE TRIGGER test_screening_request_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_screening_request_audit();`);
+    try {
+      await expect(saveScreeningServices(north, id, saved, { reviewNote: "Changed note" }, true)).rejects.toThrow("Simulated screening request audit failure");
+      expect(await getScreeningServices(north, id)).toMatchObject({
+        revision: saved, review_state: "draft", answers: { reviewNote: "Original note" },
+      });
+    } finally {
+      await database().query("DROP TRIGGER test_screening_request_audit ON audit_events; DROP FUNCTION fail_screening_request_audit();");
+    }
   });
   it("blocks Phase 3 until Consent and Intake approval and rejects invalid service outcomes", async () => {
     const noConsent = await transaction((client) => createDraft(client, north, "north", completeAnswers()));

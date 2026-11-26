@@ -184,7 +184,13 @@ async function insertRevision(client: import("pg").PoolClient, id: string, revis
   await client.query("INSERT INTO screening_service_revisions(submission_id,revision,answers,review_state,actor_id) VALUES ($1,$2,$3,$4,$5)",
     [id, revision, JSON.stringify(answers), state, actor]);
 }
-export async function saveScreeningServices(user: User, id: string, revision: number | undefined, input: unknown) {
+async function requestScreeningReview(client: import("pg").PoolClient, user: User, id: string, revision: number, answers: ScreeningServicesAnswers) {
+  await client.query(`UPDATE screening_service_records SET review_state='pending_review',review_requested_by=$2,
+    review_requested_at=now(),return_reason=NULL,revision=revision+1,updated_at=now() WHERE submission_id=$1`, [id, user.id]);
+  await insertRevision(client, id, revision + 1, answers, "pending_review", user.id);
+  await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,'screening_services_request_review',$2,ARRAY['review_state'],$3)", [user.id, id, revision + 1]);
+}
+export async function saveScreeningServices(user: User, id: string, revision: number | undefined, input: unknown, requestReview = false) {
   assertId(id);
   const parsed = screeningServicesSchema.safeParse(input);
   if (!parsed.success) throw new WorkflowError("Correct the highlighted Screening and Services answers before saving.", "invalid");
@@ -212,6 +218,10 @@ export async function saveScreeningServices(user: User, id: string, revision: nu
       : ["answers"];
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,$2,$3,$4,$5)",
       [user.id, "screening_services_save", id, changed, nextRevision]);
+    if (requestReview) {
+      await requestScreeningReview(client, user, id, nextRevision, parsed.data);
+      return nextRevision + 1;
+    }
     return nextRevision;
   });
 }
@@ -230,10 +240,7 @@ export async function reviewScreeningServices(user: User, id: string, revision: 
     if (intent === "request") {
       if (!canEdit(user, groupId)) throw new WorkflowError("You do not have editing permission.", "forbidden");
       if (row.review_state !== "draft" && row.review_state !== "returned") throw new WorkflowError("Only a draft or returned phase can be sent for review.", "invalid");
-      await client.query(`UPDATE screening_service_records SET review_state='pending_review',review_requested_by=$2,
-        review_requested_at=now(),return_reason=NULL,revision=revision+1,updated_at=now() WHERE submission_id=$1`, [id, user.id]);
-      await insertRevision(client, id, row.revision + 1, row.answers, "pending_review", user.id);
-      await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,'screening_services_request_review',$2,ARRAY['review_state'],$3)", [user.id, id, row.revision + 1]);
+      await requestScreeningReview(client, user, id, row.revision, row.answers);
       return;
     }
     if (!canReview(user, groupId)) throw new WorkflowError("You do not have review permission.", "forbidden");

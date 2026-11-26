@@ -1,15 +1,22 @@
 import Link from "next/link";
 import { Plus, Search as SearchIcon, ArrowUpRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { listSubmissions, searchSchema, type Search } from "@/lib/submissions";
+import { listSubmissions, searchSchema, type ListedSubmission, type Search } from "@/lib/submissions";
 import { programs } from "@/lib/intake-fields";
 import { Status } from "@/components/status";
+import { currentReferralPhase } from "@/lib/referral-progress";
 
 const formatDate = (date: Date) => date.toISOString().slice(0, 10);
 function pageLink(search: Search, page: number) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries({ ...search, page })) if (value !== "") params.set(key, String(value));
   return `/forms?${params}`;
+}
+function phaseSummary(row: ListedSubmission) {
+  if (row.removed_at || row.status === "archived") return "Restore this referral to work on its phases";
+  if (!row.has_consent || row.review_state !== "approved") return null;
+  if (row.screening_review_state !== "approved") return "Intake: Approved";
+  return "Intake and Screening and Services: Approved";
 }
 export default async function Forms({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requireUser();
@@ -39,7 +46,7 @@ export default async function Forms({ searchParams }: { searchParams: Promise<Re
           <div className="relative mt-2"><SearchIcon size={17} className="absolute left-3 top-3 text-slate-400" /><input name="q" defaultValue={typeof raw.q === "string" ? raw.q : ""} maxLength={100} className="input !pl-9" placeholder="Search authorized records..." /></div>
         </label>
         <label className="text-xs font-semibold">Status<select name="status" defaultValue={search.status} className="input mt-2">
-          <option value="active">Active referrals</option><option value="all">All including archived</option><option value="draft">Draft</option><option value="pending_review">Awaiting review</option><option value="returned">Returned for changes</option><option value="approved">Approved</option><option value="submitted">Submitted (includes legacy)</option><option value="archived">Archived</option>{user.role === "admin" && <option value="removed">Removed imports</option>}
+          <option value="active">Active referrals</option><option value="all">All including archived</option><option value="draft">Intake draft</option><option value="pending_review">Awaiting review (any phase)</option><option value="returned">Intake returned for changes</option><option value="approved">Intake approved</option><option value="submitted">Submitted (includes legacy)</option><option value="archived">Archived</option>{user.role === "admin" && <option value="removed">Removed imports</option>}
         </select></label>
         <label className="text-xs font-semibold">Program type<select name="program" defaultValue={search.program} className="input mt-2"><option value="">All programs</option>{programs.map((p) => <option key={p}>{p}</option>)}</select></label>
         <label className="text-xs font-semibold">Navigator<input name="navigator" maxLength={100} defaultValue={search.navigator} className="input mt-2" /></label>
@@ -59,22 +66,25 @@ export default async function Forms({ searchParams }: { searchParams: Promise<Re
       </div> : <>
         <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block"><table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>{["Participant", "Program", "Status", "Updated", "Open"].map((label) => <th key={label} className="px-5 py-4">{label}</th>)}</tr></thead>
-          <tbody>{result.records.map((row) => <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
+          <tbody>{result.records.map((row) => { const current = currentReferralPhase(row); const summary = phaseSummary(row); return <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
             <td className="px-5 py-4"><Link href={`/forms/${row.id}`} className="font-semibold text-teal-900 hover:underline">{row.participant_name || "Unnamed draft"}</Link><p className="mt-1 text-xs text-slate-500">DOB: {row.date_of_birth ?? "Unanswered"}</p></td>
-            <td className="px-5 py-4">{row.program_type ?? "Not selected"}</td><td className="px-5 py-4"><Status status={row.status} reviewState={row.review_state} removed={!!row.removed_at} /><p className="mt-1 text-xs text-slate-500">{!row.has_consent ? "Consent needed" : row.review_state === "approved" ? "Intake approved · Screening pending" : "Intake in progress"}</p></td><td className="px-5 py-4 text-slate-500">{formatDate(row.updated_at)}</td>
+            <td className="px-5 py-4">{row.program_type ?? "Not selected"}</td><td className="px-5 py-4"><span className="mr-1 text-xs text-slate-500">{current.phase}:</span><Status status={row.status} reviewState={current.state} removed={!!row.removed_at} />{summary && <p className="mt-1 text-xs text-slate-500">{summary}</p>}
+              {!row.removed_at && row.status !== "archived" && row.has_consent && row.review_state === "approved" && row.screening_review_state === "pending_review" &&
+                <Link href={`/forms/${row.id}/screening`} className="mt-1 inline-block text-xs font-semibold text-teal-800 underline">Open Screening and Services review</Link>}
+            </td><td className="px-5 py-4 text-slate-500">{formatDate(row.phase_updated_at)}</td>
             <td className="px-5 py-4"><Link aria-label={`Open referral for ${row.participant_name || "unnamed participant"}`} href={`/forms/${row.id}`} className="text-teal-800"><ArrowUpRight size={18} /></Link></td>
-          </tr>)}</tbody>
+          </tr>; })}</tbody>
         </table></div>
-        <div className="grid gap-3 md:hidden">{result.records.map((row) => <Link key={row.id} href={`/forms/${row.id}`} className="panel !p-5">
-          <div className="flex items-center justify-between gap-3"><h2 className="font-bold">{row.participant_name || "Unnamed draft"}</h2><Status status={row.status} reviewState={row.review_state} removed={!!row.removed_at} /></div>
-          <p className="mt-2 text-sm text-slate-600">{row.program_type ?? "Program not selected"}</p><p className="mt-2 text-xs text-slate-500">{!row.has_consent ? "Consent needed" : row.review_state === "approved" ? "Intake approved · Screening pending" : "Intake in progress"}</p><p className="mt-2 text-xs text-slate-500">DOB: {row.date_of_birth ?? "Unanswered"} · Updated {formatDate(row.updated_at)}</p>
-        </Link>)}</div>
+        <div className="grid gap-3 md:hidden">{result.records.map((row) => { const current = currentReferralPhase(row); const summary = phaseSummary(row); return <Link key={row.id} href={`/forms/${row.id}`} className="panel !p-5">
+          <div className="flex items-center justify-between gap-3"><h2 className="font-bold">{row.participant_name || "Unnamed draft"}</h2><span><span className="mr-1 text-xs text-slate-500">{current.phase}:</span><Status status={row.status} reviewState={current.state} removed={!!row.removed_at} /></span></div>
+          <p className="mt-2 text-sm text-slate-600">{row.program_type ?? "Program not selected"}</p>{summary && <p className="mt-2 text-xs text-slate-500">{summary}</p>}<p className="mt-2 text-xs text-slate-500">DOB: {row.date_of_birth ?? "Unanswered"} · Updated {formatDate(row.phase_updated_at)}</p>
+        </Link>; })}</div>
       </>}
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm">
         <p className="text-slate-500">{result.total} result{result.total === 1 ? "" : "s"} · Page {search.page} of {Math.max(1, Math.ceil(result.total / 20))}</p>
         <div className="flex gap-2">{search.page > 1 && <Link className="btn-secondary" href={pageLink(search, search.page - 1)}>Previous</Link>}{search.page * 20 < result.total && <Link className="btn-secondary" href={pageLink(search, search.page + 1)}>Next</Link>}</div>
       </div>
     </section>}
-    <p className="text-xs leading-5 text-slate-500">Other packet forms, approved signatures, user administration, and retention-based deletion are planned for subsequent milestones. Archiving a form does not record program completion.</p>
+    <p className="text-xs leading-5 text-slate-500">Refresh the page to see changes made by other users. Other packet forms, approved signatures, user administration, and retention-based deletion are planned for subsequent milestones. Archiving a form does not record program completion.</p>
   </div>;
 }

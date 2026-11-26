@@ -3,8 +3,21 @@ import { intakeFields } from "../src/lib/intake-fields";
 import { getIntakeCompleteness, parseFormAnswers, validateAnswers, type Answers } from "../src/lib/intake-validation";
 import { canEdit, canReview, canView, databaseConnectionString, demoAccessEnabled, developmentEnabled, hostedDemoEnabled, type User } from "../src/lib/access";
 import { searchSchema } from "../src/lib/submissions";
+import { currentReferralPhase } from "../src/lib/referral-progress";
 
 const user: User = { id: "test", display_name: "Test", role: "editor", group_id: "north", group_name: "North" };
+describe("Current referral phase", () => {
+  it("uses the first unfinished prerequisite and the current phase's review status", () => {
+    const row = { status: "submitted" as const, removed_at: null, has_consent: true, review_state: "approved" as const,
+      screening_review_state: "approved" as const, completion_review_state: "pending_review" as const };
+    expect(currentReferralPhase(row)).toEqual({ phase: "Program Completion", state: "pending_review" });
+    expect(currentReferralPhase({ ...row, screening_review_state: "draft" })).toEqual({ phase: "Screening and Services", state: "draft" });
+    expect(currentReferralPhase({ ...row, review_state: "returned" })).toEqual({ phase: "Intake", state: "returned" });
+    expect(currentReferralPhase({ ...row, has_consent: false })).toEqual({ phase: "Consent", state: "needed" });
+    expect(currentReferralPhase({ ...row, completion_review_state: null })).toEqual({ phase: "Program Completion", state: "ready" });
+    expect(currentReferralPhase({ ...row, status: "archived" })).toEqual({ phase: "Referral", state: "draft" });
+  });
+});
 function valid(): Answers {
   return { name: "Synthetic Participant", dob: "1990-01-01", programType: "Law Enforcement Deflection", date: "2026-01-01", navigator: "Demo Navigator" };
 }

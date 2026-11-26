@@ -27,7 +27,7 @@ try {
   await client.query("SELECT pg_advisory_xact_lock(hashtext('deflection_schema_migrations'))");
   await client.query(await readFile(new URL("../db/001-initial.sql", import.meta.url), "utf8"));
   await client.query("CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const migration of ["002-review-workflow.sql", "003-intake-import.sql", "004-import-removal.sql", "005-redcap-prototype.sql", "006-consent.sql", "007-screening-services.sql", "008-phase-review-notes.sql"]) {
+  for (const migration of ["002-review-workflow.sql", "003-intake-import.sql", "004-import-removal.sql", "005-redcap-prototype.sql", "006-consent.sql", "007-screening-services.sql", "008-phase-review-notes.sql", "009-program-completion.sql"]) {
     const applied = await client.query("SELECT name FROM schema_migrations WHERE name=$1", [migration]);
     if (!applied.rowCount) {
       await client.query(await readFile(new URL(`../db/${migration}`, import.meta.url), "utf8"));

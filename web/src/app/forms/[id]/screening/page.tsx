@@ -8,8 +8,9 @@ import { screeningServicesSchema } from "@/lib/screening-service-schema";
 import { ScreeningServicesForm } from "@/components/screening-services-form";
 import { ScreeningServicesView } from "@/components/screening-services-view";
 import { ScreeningServicesReviewActions } from "@/components/screening-services-review-actions";
+import { CorrectionPrompt } from "@/components/correction-prompt";
 
-export default async function ScreeningPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ScreeningPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ correct?: string }> }) {
   const user = await requireUser();
   const { id } = await params;
   const referral = await getSubmission(user, id);
@@ -24,6 +25,7 @@ export default async function ScreeningPage({ params }: { params: Promise<{ id: 
   ]);
   const canEditPhase = canEdit(user, referral.group_id) && !referral.legal_hold;
   const canReviewPhase = canReview(user, referral.group_id) && !contributed && record?.review_requested_by !== user.id;
+  const correcting = (await searchParams).correct === "1";
   const empty = screeningServicesSchema.parse({});
   return <div className="space-y-6">
     <Link href={`/forms/${id}`} className="text-sm text-teal-800 underline">Back to referral</Link>
@@ -36,8 +38,12 @@ export default async function ScreeningPage({ params }: { params: Promise<{ id: 
       {record.return_reason && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-900">Returned: {record.return_reason}</p>}
       {record.review_state === "pending_review" && canReviewPhase && <ScreeningServicesReviewActions id={id} revision={record.revision} />}
       {record.review_state === "pending_review" && record.review_requested_by === user.id && <p className="text-sm text-amber-800">You requested this review; another reviewer must decide.</p>}
+      {record.review_state === "pending_review" && record.review_requested_by !== user.id && contributed && canReview(user, referral.group_id) && <p className="text-sm text-amber-800">You contributed to this phase; a different reviewer must decide.</p>}
     </section>}
-    {canEditPhase && <section><h2 className="mb-4 text-xl font-bold">{record ? "Edit phase draft" : "Enter phase data"}</h2>
+    {canEditPhase && record?.review_state === "approved" && !correcting && <CorrectionPrompt phase="Screening and Services" href={`/forms/${id}/screening?correct=1`}
+      warning="Saving a correction creates a new Screening and Services draft and locks Program Completion until this phase is approved again. Existing Program Completion records and approvals are retained without requiring another review." />}
+    {canEditPhase && (record?.review_state !== "approved" || correcting) && <section><h2 className="mb-4 text-xl font-bold">{record?.review_state === "approved" ? "Correct approved Screening and Services" : record ? "Edit phase draft" : "Enter phase data"}</h2>
+      {record?.review_state === "approved" && <p className="mb-4 text-sm text-amber-800">Saving this correction locks Program Completion until this phase is approved again. Existing records and approvals are retained.</p>}
       {record?.review_state === "pending_review" && <p className="mb-4 text-sm text-amber-800">Saving will cancel the pending review request.</p>}
       <ScreeningServicesForm id={id} revision={record?.revision} initial={record ? record.answers : empty} />
     </section>}

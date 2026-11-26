@@ -17,6 +17,7 @@ export default async function ConsentPage({ params }: { params: Promise<{ id: st
   const versions = await listConsent(user, id);
   return <div className="space-y-6"><div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 1 of 4</p>
     <h1 className="mt-2 text-3xl font-bold">{versions.length ? "Correct consent" : "Submit consent"}</h1></div>
+    {versions.length > 0 && <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Submitting a correction creates a new Consent version immediately. Consent has no separate approval step; existing Intake and later approvals remain unchanged.</p>}
     <ConsentForm id={id} revision={row.revision} current={versions[0]} />
   </div>;
 }

@@ -15,15 +15,17 @@ import { listPrototypeExports } from "@/lib/redcap-prototype";
 import { RedcapRemoval } from "@/components/redcap-removal";
 import { listConsent } from "@/lib/consent";
 import { getScreeningServices } from "@/lib/screening-services";
+import { getProgramCompletion } from "@/lib/program-completion";
+import { currentReferralPhase } from "@/lib/referral-progress";
 
 export default async function Detail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser();
   const { id } = await params;
   const row = await getSubmission(user, id);
   if (!row) notFound();
-  const [audit, revisions, approved, decisions, contributed, importSource, consents, screening] = await Promise.all([
+  const [audit, revisions, approved, decisions, contributed, importSource, consents, screening, completion] = await Promise.all([
     getAudit(user, id), getRevisions(user, id), getApprovedVersions(user, id),
-    getReviewDecisions(user, id), isDraftContributor(user, id), getImportSource(user, id), listConsent(user, id), getScreeningServices(user, id),
+    getReviewDecisions(user, id), isDraftContributor(user, id), getImportSource(user, id), listConsent(user, id), getScreeningServices(user, id), getProgramCompletion(user, id),
   ]);
   const edit = canEdit(user, row.group_id);
   const removalHistory = user.role === "admin" && importSource ? await getRemovalHistory(user, id) : [];
@@ -31,6 +33,9 @@ export default async function Detail({ params, searchParams }: { params: Promise
   const redcapExports = review ? await listPrototypeExports(user, id) : [];
   const missing = getIntakeCompleteness(row.answers).totalMissing;
   const canDecide = review && !contributed && row.review_requested_by !== user.id;
+  const current = currentReferralPhase({
+    ...row, screening_review_state: screening?.review_state ?? null, completion_review_state: completion?.review_state ?? null,
+  });
   const labels = Object.fromEntries([
     ...intakeFields.flatMap((field) => [[field.key, field.label], [`${field.key}Other`, `${field.label} (other)`]]),
     ["reviewNote", "Note for reviewer"],
@@ -41,12 +46,19 @@ export default async function Detail({ params, searchParams }: { params: Promise
       .filter((key) => JSON.stringify(previous[key] ?? "") !== JSON.stringify(row.answers[key] ?? ""))
     : [];
   const display = (value: string | string[] | undefined) => Array.isArray(value) ? value.join("; ") || "Unanswered" : value || "Unanswered";
+  const phaseLabel = (state: "draft" | "pending_review" | "returned" | "approved") =>
+    ({ draft: "Draft", pending_review: "Awaiting review", returned: "Returned for changes", approved: "Approved" })[state];
+  const phaseLinkLabel = (name: string, state: string | undefined) =>
+    state === "approved" ? `${edit && !row.legal_hold ? "Correct approved" : "View"} ${name}` : `${state ? "Open" : "Enter"} ${name}`;
   return <div className="space-y-6">
     <Link className="text-sm text-teal-800 hover:underline" href="/forms">← Back to library</Link>
     <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="text-3xl font-bold">{row.participant_name || "Unnamed draft"}</h1><div className="mt-3 flex items-center gap-3"><Status status={row.status} reviewState={row.review_state} removed={!!row.removed_at} /><span className="text-sm text-slate-500">Referral · Revision {row.revision}</span></div></div>
+      <div><h1 className="text-3xl font-bold">{row.participant_name || "Unnamed draft"}</h1><div className="mt-3 flex flex-wrap items-center gap-3"><span className="text-sm text-slate-500">{current.phase}:</span><Status status={row.status} reviewState={current.state} removed={!!row.removed_at} /><span className="text-sm text-slate-500">Intake revision {row.revision}</span></div></div>
       {edit && !row.removed_at && <div className="flex flex-wrap gap-3">
-        {row.status !== "archived" && consents.length > 0 && <Link className="btn-primary" href={`/forms/${id}/edit`}>Edit Intake</Link>}
+        {row.status !== "archived" && current.phase === "Consent" && <Link className="btn-primary" href={`/forms/${id}/consent`}>Submit Consent</Link>}
+        {row.status !== "archived" && current.phase === "Intake" && <Link className="btn-primary" href={`/forms/${id}/edit`}>Edit Intake</Link>}
+        {row.status !== "archived" && current.phase === "Screening and Services" && <Link className="btn-primary" href={`/forms/${id}/screening`}>Open Screening and Services</Link>}
+        {row.status !== "archived" && current.phase === "Program Completion" && <Link className="btn-primary" href={`/forms/${id}/completion`}>{completion?.review_state === "approved" ? phaseLinkLabel("Program Completion", completion.review_state) : "Open Program Completion"}</Link>}
         {row.status !== "draft" && <ArchiveButton id={id} revision={row.revision} restore={row.status === "archived"} />}
       </div>}
     </div>
@@ -55,17 +67,20 @@ export default async function Detail({ params, searchParams }: { params: Promise
       <h2 className="text-lg font-bold">Referral phases</h2>
       <ol className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <li className="rounded-lg border p-3"><strong>1. Consent</strong><p>{consents.length ? "Submitted" : "Not submitted"}</p></li>
-        <li className="rounded-lg border p-3"><strong>2. Intake</strong><p>{!consents.length ? "Locked — submit consent" : row.review_state === "approved" ? "Approved" : row.review_state.replaceAll("_", " ")}</p></li>
-        <li className="rounded-lg border p-3"><strong>3. Screening and Services</strong><p>{!consents.length || row.review_state !== "approved" ? "Locked — approve Intake first" : screening?.review_state.replaceAll("_", " ") ?? "Ready to begin"}</p>
-          {consents.length > 0 && row.review_state === "approved" && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/screening`}>{screening ? "Open Screening and Services" : "Enter Screening and Services"}</Link>}</li>
-        <li className="rounded-lg border p-3"><strong>4. Program Completion</strong><p>{screening?.review_state === "approved" ? "Awaiting Program Completion questions" : "Locked — approve Screening and Services first"}</p></li>
+        <li className="rounded-lg border p-3"><strong>2. Intake</strong><p>{!consents.length ? "Locked — submit consent" : row.review_state === "approved" ? "Approved" : row.review_state.replaceAll("_", " ")}</p>
+          {edit && consents.length > 0 && row.review_state === "approved" && row.status !== "archived" && !row.removed_at && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/edit`}>Correct approved Intake</Link>}</li>
+        <li className="rounded-lg border p-3"><strong>3. Screening and Services</strong><p>{row.status === "archived" || row.removed_at ? "Locked — restore referral" : !consents.length || row.review_state !== "approved" ? "Locked — approve Intake first" : screening ? phaseLabel(screening.review_state) : "Ready to begin"}</p>
+          {consents.length > 0 && row.review_state === "approved" && row.status !== "archived" && !row.removed_at && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/screening`}>{phaseLinkLabel("Screening and Services", screening?.review_state)}</Link>}</li>
+        <li className="rounded-lg border p-3"><strong>4. Program Completion</strong><p>{row.status === "archived" || row.removed_at ? "Locked — restore referral" : !consents.length || row.review_state !== "approved" || screening?.review_state !== "approved" ? "Locked — approve previous phases first" : completion ? phaseLabel(completion.review_state) : "Ready to begin"}</p>
+          {consents.length > 0 && row.review_state === "approved" && screening?.review_state === "approved" && row.status !== "archived" && !row.removed_at && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/completion`}>{phaseLinkLabel("Program Completion", completion?.review_state)}</Link>}</li>
       </ol>
-      <p className="text-sm text-amber-900">Program Completion is not implemented and awaits its questions. Synthetic data only.</p>
+      <p className="text-sm text-amber-900">Synthetic data only. Phase approval does not mean the participant completed the program.</p>
     </section>
     {screening && <section className="panel space-y-3">
       <h2 className="text-lg font-bold">Screening and Services</h2>
-      <p className="text-sm">Phase status: {screening.review_state.replaceAll("_", " ")} · Revision {screening.revision}</p>
-      <Link href={`/forms/${id}/screening`} className="text-sm text-teal-800 underline">View phase details and review history</Link>
+      <p className="text-sm">Phase status: {phaseLabel(screening.review_state)} · Revision {screening.revision}</p>
+      {screening.review_state === "pending_review" && <p className="text-sm font-semibold text-blue-800">Screening and Services is awaiting a separate review.</p>}
+      <Link href={`/forms/${id}/screening`} className="text-sm text-teal-800 underline">{screening.review_state === "pending_review" ? "Open Screening and Services for review" : "View phase details and review history"}</Link>
       {screening.return_reason && <p className="text-sm text-rose-800">Returned: {screening.return_reason}</p>}
     </section>}
     <section className="panel space-y-4">
@@ -128,7 +143,7 @@ export default async function Detail({ params, searchParams }: { params: Promise
         </li>)}</ul>}
     </section>}
     <section className="panel">
-      <h2 className="text-lg font-bold">Referral review</h2>
+      <h2 className="text-lg font-bold">Intake review</h2>
       <p className="mt-2 text-sm leading-6 text-slate-600">
         {approved.length ? `Latest approved version: ${approved[0].version}, signed off ${approved[0].approved_at.toISOString().slice(0, 10)} by ${approved[0].reviewer_name}.`
           : "No reviewer-approved version exists yet. Legacy submitted records are not automatically approved."}
