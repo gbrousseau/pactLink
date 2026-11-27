@@ -11,14 +11,18 @@ import { ScreeningServicesReviewActions } from "@/components/screening-services-
 import { CorrectionPrompt } from "@/components/correction-prompt";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { ReferralNotesPanel } from "@/components/referral-notes-panel";
+import { ReviewNotificationRead } from "@/components/review-notification-read";
+import { listReviewNotifications } from "@/lib/review-notifications";
+import { ActivityNotificationRead } from "@/components/activity-notification-read";
 
-export default async function ScreeningPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ correct?: string }> }) {
+export default async function ScreeningPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ correct?: string; noticeKind?: string; noticeId?: string }> }) {
   const user = await requireUser();
   const { id } = await params;
+  const query = await searchParams;
   const referral = await getSubmission(user, id);
   if (!referral) notFound();
   if (!referral.has_consent || referral.review_state !== "approved" || referral.status === "archived" || referral.removed_at) {
-    return <div className="space-y-4"><h1 className="text-2xl font-bold">Screening and Services is locked</h1>
+    return <div className="space-y-4"><ActivityNotificationRead kind={query.noticeKind} id={query.noticeId} referralId={id} /><h1 className="text-2xl font-bold">Screening and Services is locked</h1>
       <p className="text-sm text-slate-600">Submit Consent and obtain current Intake approval before opening Phase 4.</p>
       <Link href={`/forms/${id}`} className="text-teal-800 underline">Return to referral</Link></div>;
   }
@@ -27,9 +31,13 @@ export default async function ScreeningPage({ params, searchParams }: { params: 
   ]);
   const canEditPhase = canEdit(user, referral.group_id) && !referral.legal_hold;
   const canReviewPhase = canReview(user, referral.group_id) && !contributed && record?.review_requested_by !== user.id;
-  const correcting = (await searchParams).correct === "1";
+  const reviewNotice = canReview(user, referral.group_id) && record?.review_state === "pending_review"
+    ? (await listReviewNotifications(user, id, "screening"))[0] : undefined;
+  const correcting = query.correct === "1";
   const empty = screeningServicesSchema.parse({});
   return <div className="space-y-6">
+    <ActivityNotificationRead kind={query.noticeKind} id={query.noticeId} referralId={id} />
+    {reviewNotice && <ReviewNotificationRead noticeId={reviewNotice.id} />}
     <Link href={`/forms/${id}`} className="text-sm text-teal-800 underline">Back to referral</Link>
     <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 4 of 5</p>
       <h1 className="mt-2 text-3xl font-bold">Screening and Services</h1>

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { canEdit, canReview, WorkflowError, type User } from "./access";
 import { transaction } from "./db";
+import { createNoteNotifications } from "./activity-notifications";
 
 const pageSize = 20;
 export const maxNoteLength = 30000;
@@ -37,6 +38,7 @@ export async function addReferralNote(user: User, id: string, content: unknown):
       [id, user.id, parsed.data],
     );
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields) VALUES ($1,'add_referral_note',$2,ARRAY['notes'])", [user.id, id]);
+    await createNoteNotifications(client, id, saved.rows[0].id, user.id);
     return { ...saved.rows[0], author: user.display_name };
   });
 }

@@ -6,6 +6,8 @@ import { database, transaction } from "./db";
 import { answersSchema, getIntakeCompleteness, isoDate, validateAnswers, type Answers } from "./intake-validation";
 import { consentMovedKeys, programs } from "./intake-fields";
 import { requireConsent } from "./consent";
+import { createReviewNotifications } from "./review-notifications";
+import { createDecisionNotification } from "./activity-notifications";
 
 export type Submission = {
   id: string; enrollment_id: string; participant_id: string | null; group_id: string; form_type: "intake";
@@ -180,6 +182,7 @@ export async function requestReview(user: User, id: string, revision: number) {
         );
         await snapshot(client, id, user.id);
         await audit(client, user, "request_review", id, ["review_state"], row.revision + 1);
+        await createReviewNotifications(client, id, "intake", row.revision + 1);
       });
     }
 export async function decideReview(user: User, id: string, revision: number, decision: "approve" | "return", reason = "") {
@@ -224,6 +227,7 @@ export async function decideReview(user: User, id: string, revision: number, dec
         );
         await snapshot(client, id, user.id);
         await audit(client, user, decision === "approve" ? "approve_review" : "return_review", id, ["review_state"], row.revision + 1);
+        await createDecisionNotification(client, id, row.review_requested_by, "intake", decision);
       });
     }
 export async function getSubmission(user: User, id: string): Promise<Submission | null> {

@@ -6,6 +6,8 @@ import { consentAction } from "@/app/actions";
 import type { ConsentVersion } from "@/lib/consent";
 import type { CaseFileAnswers } from "@/lib/case-file";
 import { consentInitialValues } from "@/lib/consent-prefill";
+import { signatureSchema, signatureStatement, type Signature } from "@/lib/consent-signature";
+import { SignaturePad } from "./signature-pad";
 
 export function ConsentForm({ id, revision, current, prefill }: { id?: string; revision?: number; current?: ConsentVersion; prefill?: CaseFileAnswers }) {
   const [state, action, pending] = useActionState(consentAction, {});
@@ -13,6 +15,10 @@ export function ConsentForm({ id, revision, current, prefill }: { id?: string; r
   const [reviewNote, setReviewNote] = useState(current?.review_note ?? "");
   const [agreed, setAgreed] = useState(false);
   const [signed, setSigned] = useState(false);
+  const [signature, setSignature] = useState<Signature>([]);
+  const [signatureKey, setSignatureKey] = useState(0);
+  const [signatureError, setSignatureError] = useState("");
+  const [signatureInvalidated, setSignatureInvalidated] = useState(false);
   const fields = [
     { name: "firstName", label: "First name", value: current?.first_name, required: true },
     { name: "middleName", label: "Middle name", value: current?.middle_name },
@@ -24,7 +30,15 @@ export function ConsentForm({ id, revision, current, prefill }: { id?: string; r
     { name: "emergencyName", label: "Emergency contact name", value: current?.emergency_name },
     { name: "emergencyPhone", label: "Emergency contact phone", value: current?.emergency_phone, type: "tel" },
   ];
-  return <form action={action} className="panel space-y-6">
+  const invalidSignature = signature.length > 0 && !signatureSchema.safeParse(signature).success;
+  return <form action={action} className="panel space-y-6" onChangeCapture={() => {
+    if (signature.length || signatureError) {
+      setSignature([]);
+      setSignatureError("");
+      setSignatureInvalidated(true);
+      setSignatureKey((key) => key + 1);
+    }
+  }}>
     {id && <><input type="hidden" name="id" value={id} /><input type="hidden" name="revision" value={revision} /></>}
     <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Synthetic data and synthetic PDFs only. The confirmations are staff attestations, not verification of a signature or legal consent. Withdrawal is not implemented.</p>
     {!current && prefill && <p className="text-sm text-slate-600">Available identity and contact fields were prefilled from the Case File. Verify them before submitting.</p>}
@@ -44,7 +58,18 @@ export function ConsentForm({ id, revision, current, prefill }: { id?: string; r
         onChange={(event) => setReviewNote(event.target.value)} />
       <span className="mt-1 block text-xs font-normal text-slate-500">Share context about this consent submission. Visible only to the original consent submitter and administrators.</span>
     </label>
-    <div className="flex flex-wrap gap-4"><button className="btn-primary" disabled={pending}>{pending ? "Submitting…" : "Submit consent"}</button>
+    <section className="space-y-3 rounded-lg border border-slate-300 p-4" aria-labelledby="signature-heading">
+      <h2 id="signature-heading" className="font-semibold">Participant signature (optional, synthetic only)</h2>
+      <p className="text-sm">Participant: {[values.firstName, values.middleName, values.lastName].filter(Boolean).join(" ") || "Enter the participant name above."}</p>
+      <p className="text-sm">{signatureStatement}</p>
+      <p className="text-sm font-semibold">Signature</p>
+      {signatureInvalidated && <p role="alert" className="text-sm text-amber-800">The form changed after signing, so the signature was cleared. Sign again or select Clear signature to submit without it.</p>}
+      {invalidSignature && <p role="alert" className="text-sm text-red-700">Draw a signature or clear the pad.</p>}
+      <SignaturePad key={signatureKey} signature={signature} disabled={pending} error={signatureError}
+        onError={setSignatureError} onChange={(value) => { setSignature(value); setSignatureInvalidated(false); }} />
+      <input type="hidden" name="signature" value={signature.length ? JSON.stringify(signature) : ""} />
+    </section>
+    <div className="flex flex-wrap gap-4"><button className="btn-primary" disabled={pending || signatureInvalidated || !!signatureError || invalidSignature}>{pending ? "Submitting…" : "Submit consent"}</button>
       <Link href={id ? `/forms/${id}` : "/forms"} className="btn-secondary">Cancel</Link></div>
   </form>;
 }

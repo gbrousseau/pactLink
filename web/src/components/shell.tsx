@@ -3,12 +3,13 @@ import { ClipboardList, ShieldCheck, Plus, LogOut, LayoutDashboard, Users, Messa
 import { logoutAction } from "@/app/actions";
 import type { User } from "@/lib/access";
 import { hostedDemoEnabled, roleLabels } from "@/lib/access";
-import { listCaseNotifications } from "@/lib/case-file";
-import { CaseNotifications } from "./case-notifications";
+import { listNotifications } from "@/lib/notifications";
+import { noteAlertsEnabled } from "@/lib/activity-notifications";
+import { Notifications } from "./case-notifications";
 import { ThemeControl } from "./theme-control";
 
 export async function Shell({ user, children }: { user: User; children: React.ReactNode }) {
-  const notifications = await listCaseNotifications(user);
+  const [notifications, noteAlerts] = await Promise.all([listNotifications(user), noteAlertsEnabled(user)]);
   return <div className="min-h-screen">
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-900">
       {hostedDemoEnabled() ? "HOSTED DEMO · Synthetic data only · Not approved for CJI or protected health information" : "DEVELOPMENT ONLY · Synthetic data only · Not approved for CJI or protected health information"}
@@ -21,8 +22,9 @@ export async function Shell({ user, children }: { user: User; children: React.Re
         </Link>
         <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
           <ThemeControl />
-          {user.role === "editor" && <CaseNotifications key={notifications.map((notice) => notice.id).join(",")}
-            initial={notifications.map((notice) => ({ ...notice, created_at: notice.created_at.toISOString() }))} />}
+          {user.role !== "viewer" && <Notifications key={notifications.map((notice) => `${notice.kind}-${notice.id}`).join(",")}
+            initial={notifications.map((notice) => ({ ...notice, created_at: notice.created_at.toISOString() }))}
+            noteAlerts={user.role === "editor" ? noteAlerts : undefined} />}
           <div className="text-right"><p className="text-sm font-semibold">{user.display_name}</p><p className="text-xs text-slate-500">{roleLabels[user.role]} · {user.role === "admin" ? "All groups" : user.group_name}</p></div>
           <form action={logoutAction}><button className="btn-secondary" aria-label="Sign out"><LogOut size={16} /><span className="hidden sm:inline">Sign out</span></button></form>
         </div>

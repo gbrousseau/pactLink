@@ -10,13 +10,15 @@ import { changeArchive, decideReview, requestReview, saveSubmission } from "@/li
 import { importIntakes, MAX_IMPORT_BYTES, parseIntakeImport, type ImportIssue } from "@/lib/intake-import";
 import { changeImportedRemoval, importHashState, undoImportBatch } from "@/lib/import-removal";
 import { changePrototypeRemoval, createPrototypeExport } from "@/lib/redcap-prototype";
-import { consentDocument, parseConsent, submitConsent } from "@/lib/consent";
+import { consentDocument, parseConsent, parseConsentSignature, submitConsent } from "@/lib/consent";
 import { parseScreeningForm, reviewScreeningServices, saveScreeningServices } from "@/lib/screening-services";
 import { parseCompletionForm } from "@/lib/program-completion-schema";
 import { reviewProgramCompletion, saveProgramCompletion } from "@/lib/program-completion";
-import { markCaseNotificationsRead, parseCaseFile, parseCasePhoto, publishCaseFile, saveCaseFile } from "@/lib/case-file";
+import { dismissCaseNotification, markCaseNotificationsRead, parseCaseFile, parseCasePhoto, publishCaseFile, saveCaseFile } from "@/lib/case-file";
 import { saveNavigator } from "@/lib/navigators";
 import { addReferralNote, listReferralNotes, type DisplayReferralNote } from "@/lib/referral-notes";
+import { markReviewNotificationsRead } from "@/lib/review-notifications";
+import { clearActivityNotification, setNoteAlerts } from "@/lib/activity-notifications";
 
 export type FormState = { message?: string; errors?: FieldErrors; answers?: Answers };
 export type ActionState = { error?: string };
@@ -67,7 +69,7 @@ export async function consentAction(_: ActionState, form: FormData): Promise<Act
   try {
     const input = parseConsent(form);
     const document = await consentDocument(form);
-    saved = await submitConsent(user, input, document, id || undefined, id ? Number(form.get("revision")) : undefined);
+    saved = await submitConsent(user, input, document, id || undefined, id ? Number(form.get("revision")) : undefined, parseConsentSignature(form));
   } catch (error) { return { error: safeError(error) }; }
   revalidatePath("/forms");
   redirect(`/forms/${saved}?saved=1`);
@@ -103,6 +105,33 @@ export async function markCaseNotificationsReadAction(id: string, version: numbe
   await markCaseNotificationsRead(user, id, version);
   revalidatePath("/forms", "layout");
   revalidatePath("/dashboard");
+}
+export async function markReviewNotificationsReadAction(noticeId: string) {
+  const user = await requireUser();
+  const changed = await markReviewNotificationsRead(user, noticeId);
+  if (changed) {
+    revalidatePath("/forms", "layout");
+    revalidatePath("/dashboard");
+  }
+  return changed;
+}
+export async function clearNotificationAction(kind: string, id: string, mode: "read" | "dismiss" = "dismiss", referralId?: string): Promise<ActionState & { changed?: boolean }> {
+  const user = await requireUser();
+  try {
+    if (mode !== "read" && mode !== "dismiss") throw new WorkflowError("Invalid notification action.", "invalid");
+    let changed: boolean;
+    if (kind === "case" && mode === "dismiss") changed = await dismissCaseNotification(user, id);
+    else if (["intake", "screening", "completion"].includes(kind) && mode === "dismiss") changed = await markReviewNotificationsRead(user, id, "dismiss");
+    else if (kind === "activity" || kind === "inactive") changed = await clearActivityNotification(user, kind, id, mode, referralId);
+    else throw new WorkflowError("Invalid notification.", "invalid");
+    if (!changed && mode === "dismiss") throw new WorkflowError("This notification is no longer available. Reload to refresh the list.", "missing");
+    return { changed };
+  } catch (error) { return { error: safeError(error) }; }
+}
+export async function noteAlertsPreferenceAction(enabled: boolean): Promise<ActionState> {
+  const user = await requireUser();
+  try { await setNoteAlerts(user, enabled); return {}; }
+  catch (error) { return { error: safeError(error) }; }
 }
 export async function navigatorAction(_: ActionState, form: FormData): Promise<ActionState> {
   const user = await requireUser();

@@ -198,3 +198,16 @@ export async function markCaseNotificationsRead(user: User, id: string, version:
     if (result.rowCount) await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,'case_file_notifications_read',$2,ARRAY['notification'],$3)", [user.id, id, version]);
   });
 }
+
+export async function dismissCaseNotification(user: User, noticeId: string) {
+  if (user.role !== "editor" || !z.uuid().safeParse(noticeId).success) throw new WorkflowError("Invalid Case File notification.", "invalid");
+  return transaction(async (client) => {
+    const result = await client.query<{ submission_id: string; version: number }>(`UPDATE case_file_notifications n SET read_at=now() FROM submissions s
+      WHERE n.id=$1 AND n.recipient_id=$2 AND n.read_at IS NULL AND s.id=n.submission_id
+      AND s.group_id=$3 AND s.removed_at IS NULL AND s.status<>'archived' RETURNING n.submission_id,n.version`,
+    [noticeId, user.id, user.group_id]);
+    if (result.rowCount) await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,'notification_dismiss',$2,ARRAY['case_file'],$3)",
+      [user.id, result.rows[0].submission_id, result.rows[0].version]);
+    return !!result.rowCount;
+  });
+}

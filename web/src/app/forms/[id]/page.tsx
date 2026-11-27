@@ -20,10 +20,14 @@ import { currentReferralPhase } from "@/lib/referral-progress";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { getCaseFile } from "@/lib/case-file";
 import { ReferralNotesPanel } from "@/components/referral-notes-panel";
+import { ReviewNotificationRead } from "@/components/review-notification-read";
+import { listReviewNotifications } from "@/lib/review-notifications";
+import { ActivityNotificationRead } from "@/components/activity-notification-read";
 
 export default async function Detail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser();
   const { id } = await params;
+  const query = await searchParams;
   const row = await getSubmission(user, id);
   if (!row) notFound();
   const [audit, revisions, approved, decisions, contributed, importSource, consents, screening, completion, caseFile] = await Promise.all([
@@ -33,6 +37,8 @@ export default async function Detail({ params, searchParams }: { params: Promise
   const edit = canEdit(user, row.group_id);
   const removalHistory = user.role === "admin" && importSource ? await getRemovalHistory(user, id) : [];
   const review = canReview(user, row.group_id);
+  const intakeNotice = review && row.review_state === "pending_review"
+    ? (await listReviewNotifications(user, id, "intake"))[0] : undefined;
   const redcapExports = review ? await listPrototypeExports(user, id) : [];
   const missing = getIntakeCompleteness(row.answers).totalMissing;
   const canDecide = review && !contributed && row.review_requested_by !== user.id;
@@ -55,6 +61,8 @@ export default async function Detail({ params, searchParams }: { params: Promise
   const phaseLinkLabel = (name: string, state: string | undefined) =>
     state === "approved" ? `${edit && !row.legal_hold ? "Correct approved" : "View"} ${name}` : `${state ? "Open" : "Enter"} ${name}`;
   return <div className="space-y-6">
+    <ActivityNotificationRead kind={query.noticeKind} id={query.noticeId} referralId={id} />
+    {intakeNotice && <ReviewNotificationRead noticeId={intakeNotice.id} />}
     <Link className="text-sm text-teal-800 hover:underline" href="/forms">← Back to library</Link>
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="break-all text-3xl font-bold">{row.participant_id ? `Participant ${row.participant_id}` : `Consent needed · Referral ${row.id}`}</h1><div className="mt-3 flex flex-wrap items-center gap-3"><span className="text-sm text-slate-500">{current.phase}:</span><Status status={row.status} reviewState={current.state} removed={!!row.removed_at} /><span className="text-sm text-slate-500">Intake revision {row.revision}</span></div></div>
@@ -66,7 +74,7 @@ export default async function Detail({ params, searchParams }: { params: Promise
         {row.status !== "draft" && <ArchiveButton id={id} revision={row.revision} restore={row.status === "archived"} />}
       </div>}
     </div>
-    {(await searchParams).saved === "1" && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">The operation completed. This page shows the saved database record.</p>}
+    {query.saved === "1" && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">The operation completed. This page shows the saved database record.</p>}
     <ReferralNotesPanel user={user} referral={row} />
     <CollapsibleSection title="Referral phases">
       <ol className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">

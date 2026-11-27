@@ -2,12 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { canEdit } from "@/lib/access";
-import { listConsent } from "@/lib/consent";
+import { listConsent, listConsentSignatures } from "@/lib/consent";
 import { getSubmission } from "@/lib/submissions";
 import { ConsentForm } from "@/components/consent-form";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { getCaseFile } from "@/lib/case-file";
 import { ReferralNotesPanel } from "@/components/referral-notes-panel";
+import { SignatureMarks } from "@/components/signature-marks";
+import { signatureHeight, signatureWidth } from "@/lib/consent-signature";
 
 export default async function ConsentPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -16,6 +18,7 @@ export default async function ConsentPage({ params }: { params: Promise<{ id: st
   if (!row) notFound();
   const versions = await listConsent(user, id);
   if (row.has_consent && !versions.length) notFound();
+  const signatures = versions.length ? await listConsentSignatures(user, id) : [];
   const canChange = canEdit(user, row.group_id) && !row.removed_at && row.status !== "archived";
   if (!row.has_consent && !canChange) notFound();
   const caseFile = !row.has_consent && canChange ? await getCaseFile(user, id) : null;
@@ -35,6 +38,15 @@ export default async function ConsentPage({ params }: { params: Promise<{ id: st
           <div className="sm:col-span-2"><dt className="text-slate-500">Note for reviewer</dt><dd className="mt-1 whitespace-pre-wrap break-words">{consent.review_note || "No note provided."}</dd></div>
         </dl>
         <p className="mt-3 text-sm">{consent.has_document ? <a className="text-teal-800 underline" href={`/forms/${id}/consent/${consent.version}`}>Download synthetic consent PDF</a> : "No PDF stored for this version."}</p>
+        {signatures.filter((signature) => signature.version === consent.version).map((signature) => <div key={signature.version} className="mt-4 space-y-2 text-sm">
+          <p className="font-semibold">Participant signature</p>
+          <p>{signature.statement}</p>
+          <svg aria-label="Saved participant signature" role="img" viewBox={`0 0 ${signatureWidth} ${signatureHeight}`}
+            className="block h-auto w-full max-w-xl rounded-md border border-slate-300 bg-white">
+            <SignatureMarks signature={signature.signature} />
+          </svg>
+          <p>Recorded when submitted: {consent.created_at.toISOString()} · Submitted by {consent.display_name}</p>
+        </div>)}
       </details>)}
     </CollapsibleSection>}
     {canChange && <CollapsibleSection title={versions.length ? "Correct consent" : "Consent form"} className="space-y-4">

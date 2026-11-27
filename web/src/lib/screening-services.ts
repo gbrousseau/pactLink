@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { createReviewNotifications } from "./review-notifications";
+import { createDecisionNotification } from "./activity-notifications";
 import { database, transaction } from "./db";
 import { canEdit, canReview, canView, WorkflowError, type User } from "./access";
 
@@ -189,6 +191,7 @@ async function requestScreeningReview(client: import("pg").PoolClient, user: Use
     review_requested_at=now(),return_reason=NULL,revision=revision+1,updated_at=now() WHERE submission_id=$1`, [id, user.id]);
   await insertRevision(client, id, revision + 1, answers, "pending_review", user.id);
   await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,'screening_services_request_review',$2,ARRAY['review_state'],$3)", [user.id, id, revision + 1]);
+  await createReviewNotifications(client, id, "screening", revision + 1);
 }
 export async function saveScreeningServices(user: User, id: string, revision: number | undefined, input: unknown, requestReview = false) {
   assertId(id);
@@ -263,6 +266,7 @@ export async function reviewScreeningServices(user: User, id: string, revision: 
     if (intent === "approve") await client.query("DELETE FROM screening_service_contributors WHERE submission_id=$1", [id]);
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,$2,$3,ARRAY['review_state'],$4)",
       [user.id, `screening_services_${nextState}`, id, row.revision + 1]);
+    await createDecisionNotification(client, id, row.review_requested_by, "screening", intent);
   });
 }
 export async function getScreeningServices(user: User, id: string): Promise<ScreeningServicesRecord | null> {

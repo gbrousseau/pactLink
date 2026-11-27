@@ -160,14 +160,33 @@ Next.js Server Actions enforce same-origin requests.
   records. Email and SMS are **disabled**; nothing is sent, and missing contacts
   are reported. Live delivery, verified contacts, provider retries, real
   authentication and agency security approval remain unimplemented.
+- Intake, Screening and Services, and Program Completion review requests notify
+  active analysts in the referral's group and all active administrators. The
+  red badge shows unread notifications; opening the relevant review clears it
+  for that user. Other unread alerts disappear when the review is decided or
+  canceled. Existing pending reviews are included when the migration runs.
+  Notifications refresh every 30 seconds without extending session expiry.
+- Review approvals and returns notify the original requester. New shared notes
+  notify other active navigators in the referral's group; navigators can disable
+  alerts for future notes from the bell menu. An informational alert appears
+  after 30 days without a referral change or shared note for group navigators
+  and administrators. It never changes referral status and stops when Program
+  Completion is approved or the referral is archived or removed. Each alert can
+  be dismissed individually; a dismissed inactivity alert returns only after
+  new activity and another 30 inactive days. Appointment and task reminders
+  are not implemented. Alerts are in-app only and omit participant details.
 - Referral phase 2 is Consent: required first and last names, date of birth,
   address, phone, email, sharing confirmation and signed-document confirmation;
   middle name and emergency contact information are optional. A synthetic PDF
-  is optional, up to 4 MiB. PDF checks are basic format checks, not malware
-  scanning or signature verification. A correction creates a new immutable
-  version; earlier values and PDFs are visible only to the original Consent
-  submitter and administrators. Corrections require editing permission as well.
-  Downloads are audited. A version without a PDF does not copy an earlier PDF.
+  is optional, up to 4 MiB. Participants can optionally draw a synthetic signature
+  after reviewing the form; a PDF or attestation-only submission also remains
+  available. Changing the form after signing clears the signature. The signed
+  statement, signature, form fields, submission time and submitting account
+  are retained with that immutable version. A correction does not copy a
+  previous signature or PDF. Signatures and Consent versions are visible only
+  to the original Consent submitter and administrators; signature views and
+  PDF downloads are audited. Corrections require editing permission as well.
+  PDF checks are basic format checks, not malware scanning.
 - Staff checkboxes are attestations only; the app does not verify a signature
   or establish legal consent. Consent withdrawal and invalidation are not
   implemented, so this workflow must not be used for real participants.

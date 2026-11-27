@@ -3,6 +3,8 @@ import type { PoolClient } from "pg";
 import { canEdit, canReview, canView, WorkflowError, type User } from "./access";
 import { database, transaction } from "./db";
 import { completionSchema, type CompletionAnswers } from "./program-completion-schema";
+import { createReviewNotifications } from "./review-notifications";
+import { createDecisionNotification } from "./activity-notifications";
 
 type ReviewState = "draft" | "pending_review" | "returned" | "approved";
 export type CompletionRecord = {
@@ -79,6 +81,7 @@ export async function reviewProgramCompletion(user: User, id: string, revision: 
         review_requested_at=now(),return_reason=NULL,revision=revision+1,updated_by=$2,updated_at=now() WHERE submission_id=$1`, [id, user.id]);
       await snapshot(client, id, revision + 1, row.answers, "pending_review", user.id);
       await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,'program_completion_request_review',$2,ARRAY['review_state'],$3)", [user.id, id, revision + 1]);
+      await createReviewNotifications(client, id, "completion", revision + 1);
       return;
     }
     if (row.review_state !== "pending_review" || !row.review_requested_by || !row.review_requested_at) throw new WorkflowError("This phase is not awaiting review.", "invalid");
@@ -100,6 +103,7 @@ export async function reviewProgramCompletion(user: User, id: string, revision: 
     await snapshot(client, id, revision + 1, row.answers, state, user.id);
     await client.query("INSERT INTO audit_events(actor_id,action,submission_id,changed_fields,revision) VALUES ($1,$2,$3,ARRAY['review_state'],$4)",
       [user.id, `program_completion_${state}`, id, revision + 1]);
+    await createDecisionNotification(client, id, row.review_requested_by, "completion", intent);
   });
 }
 export async function getProgramCompletion(user: User, id: string): Promise<CompletionRecord | null> {

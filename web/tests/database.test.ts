@@ -5,7 +5,8 @@ import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { saveSubmission as saveIntake, createDraft, getSubmission, listSubmissions, getAudit, getRevisions, getApprovedVersions, getReviewDecisions, requestReview, decideReview, changeArchive, searchSchema } from "../src/lib/submissions";
 import { database, transaction } from "../src/lib/db";
-import { consentDocument, downloadConsent, listConsent, parseConsent, submitConsent, type ConsentInput } from "../src/lib/consent";
+import { consentDocument, downloadConsent, listConsent, listConsentSignatures, parseConsent, parseConsentSignature, submitConsent, type ConsentInput } from "../src/lib/consent";
+import { signatureStatement, type Signature } from "../src/lib/consent-signature";
 import type { User } from "../src/lib/access";
 import type { Answers } from "../src/lib/intake-validation";
 import { intakeFields, otherOption } from "../src/lib/intake-fields";
@@ -13,10 +14,12 @@ import { getImportSource, importIntakes, parseIntakeImport } from "../src/lib/in
 import { changeImportedRemoval, eligibleForBatchUndo, getBatchPreview, getRemovalHistory, importHashState, undoImportBatch } from "../src/lib/import-removal";
 import { changePrototypeRemoval, createPrototypeExport, downloadPrototype, getPrototypeSources, listPrototypeExports } from "../src/lib/redcap-prototype";
 import { loadRedcapCodebook } from "../src/lib/redcap-codebook";
-import { caseFileSchema, downloadCaseFilePdf, downloadCasePhoto, getCaseFile, listCaseNotifications, markCaseNotificationsRead, parseCaseFile, parseCasePhoto, publishCaseFile, saveCaseFile } from "../src/lib/case-file";
+import { caseFileSchema, dismissCaseNotification, downloadCaseFilePdf, downloadCasePhoto, getCaseFile, listCaseNotifications, markCaseNotificationsRead, parseCaseFile, parseCasePhoto, publishCaseFile, saveCaseFile } from "../src/lib/case-file";
 import { consentInitialValues } from "../src/lib/consent-prefill";
 import { listNavigators, saveNavigator } from "../src/lib/navigators";
 import { addReferralNote, listAllReferralNotes, listReferralNotes, maxNoteLength } from "../src/lib/referral-notes";
+import { listReviewNotifications, markReviewNotificationsRead } from "../src/lib/review-notifications";
+import { clearActivityNotification, listActivityNotifications, listInactivityNotifications, noteAlertsEnabled, setNoteAlerts } from "../src/lib/activity-notifications";
 import {
   getScreeningServices, getScreeningServiceApprovals, parseScreeningForm, reviewScreeningServices,
   saveScreeningServices, screeningServicesSchema,
@@ -51,6 +54,7 @@ function completeAnswers(): Answers {
 let management: Pool;
 let testName: string;
 const consent: ConsentInput = { firstName: "Synthetic", middleName: "", lastName: "Person", dob: "1990-01-01", address: "123 Example Street", phone: "503-555-0100", email: "synthetic@example.test", emergencyName: "", emergencyPhone: "", reviewNote: "Reviewer context", agreed: "yes", signed: "yes" };
+const signature: Signature = [[[20, 40], [80, 60], [110, 30]]];
 describe("Synthetic consent validation", () => {
   it("requires identity and both confirmations, but not a PDF or optional contacts", async () => {
     const form = new FormData();
@@ -74,6 +78,16 @@ describe("Synthetic consent validation", () => {
     expect((await consentDocument(form))?.toString()).toContain("%PDF-");
     form.set("document", new File([new Uint8Array(4 * 1024 * 1024 + 1)], "large.pdf", { type: "application/pdf" }));
     await expect(consentDocument(form)).rejects.toThrow("4 MiB");
+  });
+  it("accepts an optional bounded drawn signature and rejects invalid strokes", () => {
+    const form = new FormData();
+    expect(parseConsentSignature(form)).toBeNull();
+    form.set("signature", JSON.stringify(signature));
+    expect(parseConsentSignature(form)).toEqual(signature);
+    for (const invalid of ["not json", "[]", "[[[1,1]]]", "[[[1,1],[801,2]]]", "x".repeat(100_001)]) {
+      form.set("signature", invalid);
+      expect(() => parseConsentSignature(form)).toThrow("Invalid signature");
+    }
   });
 });
 async function saveSubmission(user: User, value: Answers, id?: string, revision?: number) {
@@ -122,6 +136,9 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await database().query(await readFile(new URL("../db/011-case-notifications.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/012-demo-role-names.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/013-referral-notes.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/014-consent-signatures.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/015-review-notifications.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/016-activity-notifications.sql", import.meta.url), "utf8"));
   });
   it("shares append-only referral notes within the group and audits successful additions", async () => {
     const id = await saveCaseFile(admin, parseCaseFile(new FormData()), null);
@@ -241,7 +258,9 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await publishCaseFile(admin, id, 2);
     expect((await downloadCasePhoto(north, id, 2)).bytes).toEqual(png);
     expect(await listCaseNotifications(north)).toHaveLength(2);
-    await markCaseNotificationsRead(north, id, 1);
+    const firstNotice = (await listCaseNotifications(north)).find((notice) => notice.version === 1)!;
+    expect(await dismissCaseNotification(south, firstNotice.id)).toBe(false);
+    expect(await dismissCaseNotification(north, firstNotice.id)).toBe(true);
     expect((await listCaseNotifications(north)).map((item) => item.version)).toEqual([2]);
     await markCaseNotificationsRead(north, id, 2);
     expect(await listCaseNotifications(north)).toHaveLength(0);
@@ -394,6 +413,161 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await expect(saveProgramCompletion(north, id, 9, {})).rejects.toMatchObject({ code: "invalid" });
     expect((await getProgramCompletion(north, id))?.answers.completed).toBe("Yes");
   });
+  it("notifies scoped analysts and administrators for each review and clears stale or viewed alerts", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    const notices = async (user: User) => (await listReviewNotifications(user)).filter((item) => item.submission_id === id);
+    await requestReview(north, id, 1);
+    expect(await notices(reviewer)).toMatchObject([{ phase: "intake", revision: 2 }]);
+    expect(await notices(admin)).toMatchObject([{ phase: "intake", revision: 2 }]);
+    expect(await notices(southReviewer)).toEqual([]);
+    expect(await notices(viewer)).toEqual([]);
+    expect(await notices(north)).toEqual([]);
+    const reviewerNotice = (await notices(reviewer))[0];
+    await expect(markReviewNotificationsRead(viewer, reviewerNotice.id)).rejects.toMatchObject({ code: "invalid" });
+    expect(await markReviewNotificationsRead(southReviewer, reviewerNotice.id)).toBe(false);
+    await submitConsent(north, consent, null, id, 2);
+    expect(await notices(reviewer)).toMatchObject([{ phase: "intake", revision: 2 }]);
+    expect(await markReviewNotificationsRead(reviewer, reviewerNotice.id)).toBe(true);
+    expect(await notices(reviewer)).toEqual([]);
+    expect(await notices(admin)).toHaveLength(1);
+    expect((await getAudit(admin, id)).some((event) => event.action === "review_notification_read")).toBe(true);
+    await decideReview(reviewer, id, 3, "approve");
+    expect(await notices(admin)).toEqual([]);
+    expect((await listActivityNotifications(north)).filter((item) => item.submission_id === id)).toMatchObject([{ kind: "review_approved", phase: "intake" }]);
+
+    await saveScreeningServices(north, id, undefined, {}, true);
+    expect(await notices(reviewer)).toMatchObject([{ phase: "screening", revision: 2 }]);
+    const oldNotice = (await notices(reviewer))[0];
+    await saveScreeningServices(north, id, 2, {});
+    expect(await notices(admin)).toEqual([]);
+    await reviewScreeningServices(north, id, 3, "request");
+    expect(await notices(admin)).toMatchObject([{ phase: "screening", revision: 4 }]);
+    expect(await markReviewNotificationsRead(reviewer, oldNotice.id)).toBe(false);
+    expect(await notices(reviewer)).toMatchObject([{ phase: "screening", revision: 4 }]);
+    await reviewScreeningServices(reviewer, id, 4, "approve");
+    expect(await notices(admin)).toEqual([]);
+    expect((await listActivityNotifications(north)).filter((item) => item.submission_id === id)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "review_approved", phase: "screening" })]));
+
+    await saveProgramCompletion(north, id, undefined, {});
+    await reviewProgramCompletion(north, id, 1, "request");
+    expect(await notices(reviewer)).toMatchObject([{ phase: "completion", revision: 2 }]);
+    expect(await notices(admin)).toMatchObject([{ phase: "completion", revision: 2 }]);
+    await reviewProgramCompletion(reviewer, id, 2, "return", "Clarify outcome");
+    expect(await notices(admin)).toEqual([]);
+    expect(await notices(reviewer)).toEqual([]);
+    expect((await listActivityNotifications(north)).filter((item) => item.submission_id === id)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "review_returned", phase: "completion" })]));
+  });
+  it("notifies only opted-in navigators of notes and supports individual dismissal", async () => {
+    const otherId = `note-editor-${randomUUID()}`;
+    await database().query("INSERT INTO app_users(id,display_name,role,group_id) VALUES ($1,'Other navigator','editor','north')", [otherId]);
+    const other: User = { ...north, id: otherId };
+    const id = await saveSubmission(north, completeAnswers());
+    try {
+      expect(await noteAlertsEnabled(north)).toBe(true);
+      await setNoteAlerts(other, false);
+      await addReferralNote(reviewer, id, "Synthetic note");
+      const northNotices = (await listActivityNotifications(north)).filter((item) => item.submission_id === id);
+      expect(northNotices).toMatchObject([{ kind: "note" }]);
+      expect((await listActivityNotifications(other)).filter((item) => item.submission_id === id)).toEqual([]);
+      expect((await listActivityNotifications(admin)).filter((item) => item.submission_id === id)).toEqual([]);
+      await setNoteAlerts(other, true);
+      await addReferralNote(north, id, "Second synthetic note");
+      expect((await listActivityNotifications(other)).filter((item) => item.submission_id === id)).toMatchObject([{ kind: "note" }]);
+      expect((await listActivityNotifications(north)).filter((item) => item.submission_id === id)).toHaveLength(1);
+      expect(await clearActivityNotification(other, "activity", northNotices[0].id, "dismiss")).toBe(false);
+      expect(await clearActivityNotification(north, "activity", northNotices[0].id, "read", randomUUID())).toBe(false);
+      expect(await clearActivityNotification(north, "activity", northNotices[0].id, "dismiss")).toBe(true);
+      expect((await listActivityNotifications(north)).filter((item) => item.submission_id === id)).toEqual([]);
+      expect((await getAudit(admin, id)).some((event) => event.action === "notification_dismiss")).toBe(true);
+    } finally {
+      await database().query("UPDATE app_users SET active=false WHERE id=$1", [otherId]);
+    }
+  });
+  it("rolls back notes and review decisions if their notifications cannot be created", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    await requestReview(north, id, 1);
+    await database().query(`CREATE FUNCTION fail_activity_notification() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'Simulated activity notification failure'; END; $$;
+      CREATE TRIGGER test_activity_notification BEFORE INSERT ON activity_notifications FOR EACH ROW EXECUTE FUNCTION fail_activity_notification();`);
+    try {
+      await expect(addReferralNote(reviewer, id, "Must roll back")).rejects.toThrow("Simulated activity notification failure");
+      expect((await listReferralNotes(north, id)).notes).toEqual([]);
+      await expect(decideReview(reviewer, id, 2, "approve")).rejects.toThrow("Simulated activity notification failure");
+      expect((await getSubmission(north, id))?.review_state).toBe("pending_review");
+      expect((await listReviewNotifications(reviewer)).some((item) => item.submission_id === id)).toBe(true);
+    } finally {
+      await database().query("DROP TRIGGER test_activity_notification ON activity_notifications; DROP FUNCTION fail_activity_notification();");
+    }
+  });
+  it("shows a 30-day inactivity alert without changing status and resets it only after activity", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    const notices = async (user: User) => (await listInactivityNotifications(user)).filter((item) => item.submission_id === id);
+    await database().query("UPDATE submissions SET updated_at=now()-interval '29 days' WHERE id=$1", [id]);
+    expect(await notices(north)).toEqual([]);
+    await database().query("UPDATE submissions SET updated_at=now()-interval '31 days' WHERE id=$1", [id]);
+    expect(await notices(north)).toHaveLength(1);
+    expect(await notices(admin)).toHaveLength(1);
+    expect(await notices(south)).toEqual([]);
+    expect(await notices(reviewer)).toEqual([]);
+    expect(await clearActivityNotification(south, "inactive", id, "dismiss")).toBe(false);
+    expect(await clearActivityNotification(north, "inactive", id, "dismiss")).toBe(true);
+    expect(await notices(north)).toEqual([]);
+    expect(await notices(admin)).toHaveLength(1);
+    await database().query("INSERT INTO referral_notes(submission_id,author_id,content,created_at) VALUES ($1,$2,'Earlier note',now()-interval '30 days 1 hour')", [id, reviewer.id]);
+    expect(await notices(north)).toHaveLength(1);
+    await addReferralNote(reviewer, id, "Recent activity");
+    expect(await notices(north)).toEqual([]);
+    expect((await getSubmission(north, id))?.status).toBe("draft");
+    const completedId = await saveSubmission(north, completeAnswers());
+    await database().query("UPDATE submissions SET updated_at=now()-interval '31 days' WHERE id=$1", [completedId]);
+    expect((await listInactivityNotifications(north)).some((item) => item.submission_id === completedId)).toBe(true);
+    await database().query("INSERT INTO program_completion_records(submission_id,revision,answers,review_state,updated_by,updated_at) VALUES ($1,1,'{}','approved',$2,now()-interval '31 days')", [completedId, north.id]);
+    expect((await listInactivityNotifications(north)).some((item) => item.submission_id === completedId)).toBe(false);
+  });
+  it("rolls back a review request when notification creation fails", async () => {
+    const id = await saveSubmission(north, completeAnswers());
+    await database().query(`CREATE FUNCTION fail_review_notification() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'Simulated notification failure'; END; $$;
+      CREATE TRIGGER test_review_notification BEFORE INSERT ON review_notifications FOR EACH ROW EXECUTE FUNCTION fail_review_notification();`);
+    try {
+      await expect(requestReview(north, id, 1)).rejects.toThrow("Simulated notification failure");
+      expect((await getSubmission(north, id))?.review_state).toBe("draft");
+      expect((await listReviewNotifications(reviewer)).some((item) => item.submission_id === id)).toBe(false);
+    } finally {
+      await database().query("DROP TRIGGER test_review_notification ON review_notifications; DROP FUNCTION fail_review_notification();");
+    }
+  });
+  it("notifies all active eligible users and backfills existing pending reviews", async () => {
+    const suffix = randomUUID();
+    const analystId = `analyst-${suffix}`;
+    const inactiveId = `inactive-${suffix}`;
+    const adminId = `admin-${suffix}`;
+    await database().query(`INSERT INTO app_users(id,display_name,role,group_id,active) VALUES
+      ($1,'Synthetic analyst','reviewer','north',true),
+      ($2,'Inactive analyst','reviewer','north',false),
+      ($3,'Synthetic admin','admin','south',true)`, [analystId, inactiveId, adminId]);
+    const id = await saveSubmission(north, completeAnswers());
+    try {
+      await requestReview(north, id, 1);
+      const recipients = await database().query<{ recipient_id: string }>(
+        "SELECT recipient_id FROM review_notifications WHERE submission_id=$1 ORDER BY recipient_id", [id]);
+      expect(recipients.rows.map((row) => row.recipient_id)).toEqual(expect.arrayContaining([reviewer.id, admin.id, analystId, adminId]));
+      expect(recipients.rows.map((row) => row.recipient_id)).not.toContain(inactiveId);
+      expect(recipients.rows.map((row) => row.recipient_id)).not.toContain(southReviewer.id);
+      const migration = await readFile(new URL("../db/015-review-notifications.sql", import.meta.url), "utf8");
+      await expect(transaction(async (client) => {
+        await client.query("DROP TABLE review_notifications");
+        await client.query(migration);
+        const backfilled = await client.query<{ recipient_id: string }>(
+          "SELECT recipient_id FROM review_notifications WHERE submission_id=$1", [id]);
+        expect(backfilled.rows.map((row) => row.recipient_id)).toEqual(expect.arrayContaining([reviewer.id, admin.id, analystId, adminId]));
+        expect(backfilled.rows.map((row) => row.recipient_id)).not.toContain(inactiveId);
+        throw new Error("Rollback migration test");
+      })).rejects.toThrow("Rollback migration test");
+    } finally {
+      await database().query("UPDATE app_users SET active=false WHERE id=ANY($1::text[])", [[analystId, adminId]]);
+    }
+  });
   it("persists Phase 3 revisions, enforces separated review, and retains approved history", async () => {
     const intakeAnswers = { ...completeAnswers(), navigator: "Screening Queue Test", reviewNote: "Please review this Intake context." };
     const id = await saveSubmission(north, intakeAnswers);
@@ -530,6 +704,23 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     expect((await getSubmission(north, id))?.answers.name).toBe("Synthetic Test Record");
     await requestReview(north, id, 2);
   });
+  it("retains signatures with their consent versions, restricts access, and audits views", async () => {
+    const id = await submitConsent(north, consent, null, undefined, undefined, signature);
+    const saved = await listConsentSignatures(north, id);
+    expect(saved).toEqual([{ version: 1, signature, statement: signatureStatement }]);
+    expect(await listConsentSignatures(admin, id)).toEqual(saved);
+    expect(await listConsentSignatures(viewer, id)).toEqual([]);
+    expect(await listConsentSignatures(reviewer, id)).toEqual([]);
+    expect(await listConsentSignatures(south, id)).toEqual([]);
+    expect(await listConsentSignatures({ ...north, id: "other-north-editor" }, id)).toEqual([]);
+    await submitConsent(north, consent, null, id, 1);
+    expect(await listConsentSignatures(north, id)).toEqual(saved);
+    expect((await listConsent(north, id)).map((item) => item.version)).toEqual([2, 1]);
+    const events = await getAudit(admin, id);
+    expect(events.some((event) => event.action === "view_consent_signatures")).toBe(true);
+    expect(events.some((event) => event.action === "consent_submit" && event.changed_fields.includes("signature"))).toBe(true);
+    await expect(database().query("UPDATE consent_versions SET signature=NULL WHERE submission_id=$1 AND version=1", [id])).rejects.toThrow("append-only");
+  });
   it("preserves historical approval but blocks new exports until consent is submitted", async () => {
     const id = await transaction((client) => createDraft(client, north, "north", completeAnswers()));
     await database().query(`INSERT INTO approved_intake_versions
@@ -554,7 +745,7 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
       BEGIN IF NEW.action='consent_submit' THEN RAISE EXCEPTION 'Simulated consent audit failure'; END IF; RETURN NEW; END; $$;
       CREATE TRIGGER test_consent_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_consent_audit();`);
     try {
-      await expect(submitConsent(north, consent, Buffer.from("%PDF-1.4\n%%EOF"), id, 1)).rejects.toThrow("Simulated consent audit failure");
+      await expect(submitConsent(north, consent, Buffer.from("%PDF-1.4\n%%EOF"), id, 1, signature)).rejects.toThrow("Simulated consent audit failure");
       expect(await listConsent(north, id)).toEqual([]);
       expect((await getSubmission(north, id))?.revision).toBe(1);
     } finally {
