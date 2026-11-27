@@ -7,7 +7,7 @@ import { demoAccessEnabled, type User } from "./access";
 const cookieName = "deflection_dev_session";
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 
-export async function currentUser(): Promise<User | null> {
+export async function currentUser(touch = true): Promise<User | null> {
   if (!demoAccessEnabled()) return null;
   const token = (await cookies()).get(cookieName)?.value;
   if (!token) return null;
@@ -18,7 +18,7 @@ export async function currentUser(): Promise<User | null> {
     [hash(token)],
   );
   if (!result.rows[0]) return null;
-  await database().query("UPDATE sessions SET last_seen_at=now() WHERE token_hash=$1", [hash(token)]);
+  if (touch) await database().query("UPDATE sessions SET last_seen_at=now() WHERE token_hash=$1", [hash(token)]);
   return result.rows[0];
 }
 export async function requireUser(): Promise<User> {

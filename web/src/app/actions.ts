@@ -14,6 +14,8 @@ import { consentDocument, parseConsent, submitConsent } from "@/lib/consent";
 import { parseScreeningForm, reviewScreeningServices, saveScreeningServices } from "@/lib/screening-services";
 import { parseCompletionForm } from "@/lib/program-completion-schema";
 import { reviewProgramCompletion, saveProgramCompletion } from "@/lib/program-completion";
+import { markCaseNotificationsRead, parseCaseFile, parseCasePhoto, publishCaseFile, saveCaseFile } from "@/lib/case-file";
+import { saveNavigator } from "@/lib/navigators";
 
 export type FormState = { message?: string; errors?: FieldErrors; answers?: Answers };
 export type ActionState = { error?: string };
@@ -30,7 +32,7 @@ function safeError(error: unknown) {
 }
 export async function loginAction(_: ActionState, form: FormData): Promise<ActionState> {
   if (!demoAccessEnabled()) return { error: "Demo login is disabled. Enable the explicit development or hosted demo configuration." };
-  const account = z.enum(["north-editor", "north-viewer", "north-reviewer", "south-editor", "south-reviewer", "demo-admin"]).safeParse(form.get("account"));
+  const account = z.string().min(1).max(100).safeParse(form.get("account"));
   if (!account.success) return { error: "Select a valid development account." };
   try { await createSession(account.data); }
   catch (error) { return { error: safeError(error) }; }
@@ -52,6 +54,49 @@ export async function consentAction(_: ActionState, form: FormData): Promise<Act
   } catch (error) { return { error: safeError(error) }; }
   revalidatePath("/forms");
   redirect(`/forms/${saved}?saved=1`);
+}
+export async function caseFileAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const id = form.get("id");
+  if (id !== null && typeof id !== "string") return { error: "Invalid record identifier." };
+  const version = id ? z.string().regex(/^(0|[1-9]\d*)$/).transform(Number).pipe(z.number().int().safe()).safeParse(form.get("version")) : null;
+  if (id && !version?.success) return { error: "Invalid Case File version." };
+  const group = !id ? z.string().min(1).max(100).safeParse(form.get("groupId")) : null;
+  if (!id && !group?.success) return { error: "Select an available group." };
+  let saved: string;
+  try {
+    saved = await saveCaseFile(user, parseCaseFile(form), await parseCasePhoto(form), id || undefined,
+      version?.success ? version.data : undefined, group?.success ? group.data : undefined);
+  } catch (error) { return { error: safeError(error) }; }
+  revalidatePath("/forms");
+  revalidatePath(`/forms/${saved}`);
+  redirect(`/forms/${saved}?saved=1`);
+}
+export async function publishCaseFileAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const parsed = z.object({ id: z.uuid(), version: z.coerce.number().int().positive() }).safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: "Invalid Case File version." };
+  try { await publishCaseFile(user, parsed.data.id, parsed.data.version); }
+  catch (error) { return { error: safeError(error) }; }
+  revalidatePath(`/forms/${parsed.data.id}`);
+  redirect(`/forms/${parsed.data.id}/case-file?submitted=1`);
+}
+export async function markCaseNotificationsReadAction(id: string, version: number) {
+  const user = await requireUser();
+  await markCaseNotificationsRead(user, id, version);
+  revalidatePath("/forms", "layout");
+  revalidatePath("/dashboard");
+}
+export async function navigatorAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const rawId = form.get("id");
+  if (rawId !== null && typeof rawId !== "string") return { error: "Invalid navigator." };
+  try {
+    await saveNavigator(user, { displayName: form.get("displayName"), groupId: form.get("groupId"),
+      email: form.get("email"), phone: form.get("phone"), active: form.get("active") === "yes" }, rawId || undefined);
+  } catch (error) { return { error: safeError(error) }; }
+  revalidatePath("/forms/users");
+  redirect("/forms/users?saved=1");
 }
 export async function screeningServicesAction(_: ActionState, form: FormData): Promise<ActionState> {
   const user = await requireUser();

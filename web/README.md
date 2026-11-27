@@ -106,17 +106,44 @@ if available, and never enter real participant or protected information.
 | North Reviewer | Review and approve/return North drafts, but cannot create or edit intakes |
 | South Editor | Create/read/edit/archive/restore South Intake records |
 | South Reviewer | Review and approve/return South drafts, but cannot create or edit intakes |
-| Administrator | Read/edit/archive/restore/review across both groups; creates in North |
+| Administrator | Read/edit/archive/restore/review across both groups; select a group when creating a Case File |
 
 Sessions use random, HTTP-only, SameSite=Strict cookies with hashed tokens in the
 database. Idle expiry is 20 minutes; maximum lifetime is 8 hours. The inactivity
-clock advances on authenticated requests, not mouse activity. Cookie transport
+clock advances on authenticated requests, not mouse activity or notification polling. Cookie transport
 is HTTP only for this loopback demo; production authentication must use HTTPS.
 Next.js Server Actions enforce same-origin requests.
 
 ## Implemented
 
-- Referral phase 1 is Consent: required first and last names, date of birth,
+- Phase 1 Case File is optional and can be saved before or after Consent. It
+  records identity, contact and incident information, an optional reviewer note,
+  and an optional synthetic JPEG or PNG up to 4 MiB. All fields are optional.
+  Only administrators can create or edit Case Files. They save a draft and
+  explicitly submit a version to active navigators (editors) in the referral's
+  group. Navigators see only submitted versions; reviewers and viewers cannot
+  access Case Files or photos. Later drafts remain private until resubmitted.
+  Existing Case Files are not automatically submitted during migration.
+  Saves retain immutable versions and photo access is audited. Basic format
+  checks are not malware scanning. Blank photo uploads retain the previous photo.
+  Starting with Consent instead is supported, and Case File is not an approval
+  prerequisite. Available identity, address and phone fields prefill a new
+  Consent form for verification; navigators use only the submitted version and
+  existing Consent versions are never overwritten. The view displays the entry
+  date (UTC) and optional scheduled appearance date/time (local time).
+  Administrators and authorized navigators can download an audited synthetic
+  PDF of the version they are viewing, including the photo. The export fails
+  explicitly if a photo or characters cannot be rendered, rather than omitting
+  them. Reload if a newer visible version has replaced the one shown.
+- Administrators manage synthetic navigator profiles, group membership, active
+  status and optional email and phone under Navigator profiles. Submission
+  creates an in-app notification per active navigator in the same group.
+  The bell refreshes periodically without extending session expiry; viewing the
+  Case File clears that user's applicable notifications, retaining their read
+  records. Email and SMS are **disabled**; nothing is sent, and missing contacts
+  are reported. Live delivery, verified contacts, provider retries, real
+  authentication and agency security approval remain unimplemented.
+- Referral phase 2 is Consent: required first and last names, date of birth,
   address, phone, email, sharing confirmation and signed-document confirmation;
   middle name and emergency contact information are optional. A synthetic PDF
   is optional, up to 4 MiB. PDF checks are basic format checks, not malware
@@ -127,7 +154,7 @@ Next.js Server Actions enforce same-origin requests.
 - Staff checkboxes are attestations only; the app does not verify a signature
   or establish legal consent. Consent withdrawal and invalidation are not
   implemented, so this workflow must not be used for real participants.
-- Consent unlocks phase 2 Intake. Historical and imported records remain
+- Consent unlocks phase 3 Intake. Historical and imported records remain
   consent-unverified until a new consent version is submitted. Their original
   answers and approved snapshots are retained; corrections do not invalidate
   earlier Intake approvals. Name searches match the latest Consent only when
@@ -135,7 +162,7 @@ Next.js Server Actions enforce same-origin requests.
   search and sorting by name or DOB are unavailable.
   Consent is required for Intake changes, review and new REDCap prototypes.
   Each Consent version can include an optional note for the reviewer.
-- Phase 3 Screening and Services unlocks after current Intake approval. It
+- Phase 4 Screening and Services unlocks after current Intake approval. It
   includes the screenshot-based screenings, disorder identification, diagnosis,
   referral, ASAM date/location, and service-by-service referral/outcome/reason
   fields. ASAM location is free text. Service statuses are validated against
@@ -143,9 +170,9 @@ Next.js Server Actions enforce same-origin requests.
   revision is audited and retained. Editors can save and request review;
   reviewers approve or return with a reason, using separation of duties.
   Participant identity is not asked again. Because the source packet marks no
-  Phase 3 question as required, it allows blank answers and leaves completeness
+  Screening question as required, it allows blank answers and leaves completeness
   to staff review; the service matrix is explicitly optional where not referred.
-- Phase 4 Program Completion unlocks after current Intake and Screening and
+- Phase 5 Program Completion unlocks after current Intake and Screening and
   Services approval. It records completion or alumni status, exit dates,
   reasons and outcomes, justice and charge disposition, housing, employment,
   health and other information from the supplied completion form. Participant

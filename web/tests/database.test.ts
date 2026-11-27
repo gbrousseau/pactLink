@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { saveSubmission as saveIntake, createDraft, getSubmission, listSubmissions, getAudit, getRevisions, getApprovedVersions, getReviewDecisions, requestReview, decideReview, changeArchive, searchSchema } from "../src/lib/submissions";
 import { database, transaction } from "../src/lib/db";
@@ -12,6 +13,9 @@ import { getImportSource, importIntakes, parseIntakeImport } from "../src/lib/in
 import { changeImportedRemoval, eligibleForBatchUndo, getBatchPreview, getRemovalHistory, importHashState, undoImportBatch } from "../src/lib/import-removal";
 import { changePrototypeRemoval, createPrototypeExport, downloadPrototype, getPrototypeSources, listPrototypeExports } from "../src/lib/redcap-prototype";
 import { loadRedcapCodebook } from "../src/lib/redcap-codebook";
+import { caseFileSchema, downloadCaseFilePdf, downloadCasePhoto, getCaseFile, listCaseNotifications, markCaseNotificationsRead, parseCaseFile, parseCasePhoto, publishCaseFile, saveCaseFile } from "../src/lib/case-file";
+import { consentInitialValues } from "../src/lib/consent-prefill";
+import { listNavigators, saveNavigator } from "../src/lib/navigators";
 import {
   getScreeningServices, getScreeningServiceApprovals, parseScreeningForm, reviewScreeningServices,
   saveScreeningServices, screeningServicesSchema,
@@ -113,6 +117,146 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await database().query(await readFile(new URL("../db/007-screening-services.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/008-phase-review-notes.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/009-program-completion.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/010-case-file.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/011-case-notifications.sql", import.meta.url), "utf8"));
+  });
+  it("saves optional case files without blocking consent, scopes access, retains photos and rejects stale edits", async () => {
+    const form = new FormData();
+    form.set("firstName", "Synthetic"); form.set("lastName", "Person");
+    form.set("dob", "1990-01-01"); form.set("phone", "503-555-0100"); form.set("leContact", "Example Police");
+    form.set("incidentSummary", "Synthetic incident"); form.set("reviewNote", "Synthetic note");
+    const input = parseCaseFile(form);
+    expect(consentInitialValues(undefined, input)).toMatchObject({
+      firstName: "Synthetic", middleName: "", lastName: "Person", dob: "1990-01-01",
+      address: "", phone: "503-555-0100", email: "",
+    });
+    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+    form.set("photo", new File([png], "synthetic.png", { type: "image/png" }));
+    const photo = await parseCasePhoto(form);
+    await expect(saveCaseFile(north, input, photo)).rejects.toMatchObject({ code: "forbidden" });
+    const id = await saveCaseFile(admin, input, photo);
+    expect((await getSubmission(north, id))?.has_consent).toBe(false);
+    expect(await getCaseFile(north, id)).toBeNull();
+    expect(await getCaseFile(viewer, id)).toBeNull();
+    expect(await getCaseFile(south, id)).toBeNull();
+    await expect(downloadCasePhoto(south, id, 1)).rejects.toMatchObject({ code: "missing" });
+    await expect(downloadCasePhoto(north, id, 1)).rejects.toMatchObject({ code: "missing" });
+    await expect(saveCaseFile(viewer, input, null, id, 1)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(publishCaseFile(north, id, 1)).rejects.toMatchObject({ code: "forbidden" });
+    expect(await publishCaseFile(admin, id, 1)).toBe(1);
+    expect((await getCaseFile(north, id))?.answers).toMatchObject({ firstName: "Synthetic", leContact: "Example Police" });
+    expect(await getCaseFile(viewer, id)).toBeNull();
+    expect(await getCaseFile(reviewer, id)).toBeNull();
+    await expect(downloadCasePhoto(reviewer, id, 1)).rejects.toMatchObject({ code: "missing" });
+    expect((await downloadCasePhoto(north, id, 1)).bytes).toEqual(png);
+    expect(await listCaseNotifications(north)).toHaveLength(1);
+    expect(await listCaseNotifications(south)).toHaveLength(0);
+    await saveCaseFile(admin, { ...input, incidentSummary: "Updated" }, null, id, 1);
+    expect((await getCaseFile(north, id))?.answers.incidentSummary).toBe("Synthetic incident");
+    await expect(downloadCasePhoto(north, id, 2)).rejects.toMatchObject({ code: "missing" });
+    await expect(saveCaseFile(admin, input, null, id, 1)).rejects.toMatchObject({ code: "conflict" });
+    await expect(publishCaseFile(admin, id, 1)).rejects.toMatchObject({ code: "conflict" });
+    await publishCaseFile(admin, id, 2);
+    expect((await downloadCasePhoto(north, id, 2)).bytes).toEqual(png);
+    expect(await listCaseNotifications(north)).toHaveLength(2);
+    await markCaseNotificationsRead(north, id, 1);
+    expect((await listCaseNotifications(north)).map((item) => item.version)).toEqual([2]);
+    await markCaseNotificationsRead(north, id, 2);
+    expect(await listCaseNotifications(north)).toHaveLength(0);
+    await markCaseNotificationsRead(north, id, 2);
+    await database().query("UPDATE submissions SET legal_hold=true WHERE id=$1", [id]);
+    await expect(saveCaseFile(admin, input, null, id, 2)).rejects.toMatchObject({ code: "invalid" });
+    await database().query("UPDATE submissions SET legal_hold=false WHERE id=$1", [id]);
+    await expect(database().query("UPDATE case_file_versions SET answers='{}' WHERE submission_id=$1", [id])).rejects.toThrow();
+    await submitConsent(north, consent, null, id, 1);
+    expect((await getSubmission(north, id))?.has_consent).toBe(true);
+    expect(consentInitialValues((await listConsent(north, id))[0], { ...input, firstName: "Changed" }).firstName).toBe("Synthetic");
+    expect((await getCaseFile(admin, id))?.version).toBe(2);
+    const events = await getAudit(admin, id);
+    expect(events.some((event) => event.action === "case_file_save" && event.changed_fields.includes("incidentSummary"))).toBe(true);
+    expect(events.some((event) => event.action === "case_file_photo_download")).toBe(true);
+    expect(events.some((event) => event.action === "case_file_publish")).toBe(true);
+  });
+  it("allows only administrators to manage navigator profiles", async () => {
+    const profile = { displayName: "Synthetic Navigator", groupId: "south", email: "synthetic@example.test", phone: "503-555-0100", active: true };
+    await expect(saveNavigator(north, profile)).rejects.toMatchObject({ code: "forbidden" });
+    const id = await saveNavigator(admin, profile);
+    expect((await listNavigators(admin)).find((item) => item.id === id)).toMatchObject({ group_id: "south", active: true });
+    await saveNavigator(admin, { ...profile, active: false }, id);
+    expect((await listNavigators(admin)).find((item) => item.id === id)?.active).toBe(false);
+    await expect(saveNavigator(admin, { ...profile, groupId: "missing" }, id)).rejects.toMatchObject({ code: "invalid" });
+  });
+  it("exports only the visible Case File version and audits successful PDF downloads", async () => {
+    const input = parseCaseFile(new FormData());
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l2sAAAAASUVORK5CYII=", "base64");
+    const id = await saveCaseFile(admin, { ...input, firstName: "Synthetic" }, { bytes: png, type: "image/png" });
+    await expect(downloadCaseFilePdf(north, id, 1)).rejects.toMatchObject({ code: "missing" });
+    await expect(downloadCaseFilePdf(viewer, id, 1)).rejects.toMatchObject({ code: "missing" });
+    expect(Buffer.from(await downloadCaseFilePdf(admin, id, 1)).subarray(0, 5).toString()).toBe("%PDF-");
+    await publishCaseFile(admin, id, 1);
+    const navigatorPdf = await downloadCaseFilePdf(north, id, 1);
+    const resources = (await PDFDocument.load(navigatorPdf)).getPage(0).node.Resources();
+    if (!resources) throw new Error("Missing PDF resources.");
+    expect(resources.lookup(PDFName.of("XObject"), PDFDict).keys().length).toBeGreaterThan(0);
+    await expect(downloadCaseFilePdf(south, id, 1)).rejects.toMatchObject({ code: "missing" });
+    await expect(downloadCaseFilePdf(reviewer, id, 1)).rejects.toMatchObject({ code: "missing" });
+    await saveCaseFile(admin, { ...input, firstName: "Updated" }, null, id, 1);
+    await expect(downloadCaseFilePdf(admin, id, 1)).rejects.toMatchObject({ code: "conflict" });
+    expect(Buffer.from(await downloadCaseFilePdf(north, id, 1)).subarray(0, 5).toString()).toBe("%PDF-");
+    await publishCaseFile(admin, id, 2);
+    await expect(downloadCaseFilePdf(north, id, 1)).rejects.toMatchObject({ code: "conflict" });
+    await markCaseNotificationsRead(north, id, 2);
+    const events = (await getAudit(admin, id)).filter((event) => event.action === "case_file_pdf_export");
+    expect(events).toHaveLength(3);
+    expect(events.map((event) => event.revision)).toEqual([1, 1, 1]);
+  });
+  it("does not audit a PDF export when the stored photo cannot be rendered", async () => {
+    const input = parseCaseFile(new FormData());
+    const photo = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+    const id = await saveCaseFile(admin, input, { bytes: photo, type: "image/png" });
+    await expect(downloadCaseFilePdf(admin, id, 1)).rejects.toMatchObject({ code: "invalid" });
+    expect((await getAudit(admin, id)).some((event) => event.action === "case_file_pdf_export")).toBe(false);
+  });
+  it("notifies each active same-group navigator separately and records disabled delivery", async () => {
+    const profile = { displayName: "Synthetic Second Navigator", groupId: "north", email: "synthetic@example.test", phone: "503-555-0100", active: true };
+    const otherId = await saveNavigator(admin, profile);
+    const other: User = { ...north, id: otherId };
+    try {
+      const input = parseCaseFile(new FormData());
+      const id = await saveCaseFile(admin, input, null);
+      expect(await publishCaseFile(admin, id, 1)).toBe(2);
+      expect(await listCaseNotifications(north)).toHaveLength(1);
+      expect(await listCaseNotifications(other)).toHaveLength(1);
+      const delivery = await database().query<{ email_status: string; sms_status: string }>(
+        "SELECT email_status,sms_status FROM case_file_notifications WHERE submission_id=$1 AND recipient_id=$2", [id, otherId]);
+      expect(delivery.rows[0]).toEqual({ email_status: "disabled", sms_status: "disabled" });
+      const missing = await database().query<{ email_status: string; sms_status: string }>(
+        "SELECT email_status,sms_status FROM case_file_notifications WHERE submission_id=$1 AND recipient_id=$2", [id, north.id]);
+      expect(missing.rows[0]).toEqual({ email_status: "missing_contact", sms_status: "missing_contact" });
+      await markCaseNotificationsRead(other, id, 1);
+      expect(await listCaseNotifications(other)).toHaveLength(0);
+      expect(await listCaseNotifications(north)).toHaveLength(1);
+      await markCaseNotificationsRead(north, id, 1);
+      await expect(publishCaseFile(admin, id, 1)).rejects.toMatchObject({ code: "conflict" });
+    } finally {
+      await saveNavigator(admin, { ...profile, active: false }, otherId);
+    }
+  });
+  it("validates optional case fields and image types", async () => {
+    const empty = new FormData();
+    expect(caseFileSchema.safeParse(parseCaseFile(empty)).success).toBe(true);
+    expect(await parseCasePhoto(empty)).toBeNull();
+    empty.set("dob", "invalid");
+    expect(() => parseCaseFile(empty)).toThrow();
+    empty.delete("dob");
+    empty.set("appearanceDate", "2026-11-12");
+    expect(() => parseCaseFile(empty)).toThrow();
+    empty.set("appearanceTime", "09:00");
+    expect(parseCaseFile(empty)).toMatchObject({ appearanceDate: "2026-11-12", appearanceTime: "09:00" });
+    empty.set("photo", new File(["not an image"], "photo.png", { type: "image/png" }));
+    await expect(parseCasePhoto(empty)).rejects.toThrow("format");
+    empty.set("photo", new File(["data"], "photo.svg", { type: "image/svg+xml" }));
+    await expect(parseCasePhoto(empty)).rejects.toThrow("JPEG or PNG");
   });
   it("gates Program Completion, preserves reviewed outcomes and notes, and enforces separated review", async () => {
     const id = await saveSubmission(north, { ...completeAnswers(), navigator: "Completion Queue Test" });

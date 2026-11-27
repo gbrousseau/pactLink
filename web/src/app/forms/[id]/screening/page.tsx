@@ -18,7 +18,7 @@ export default async function ScreeningPage({ params, searchParams }: { params: 
   if (!referral) notFound();
   if (!referral.has_consent || referral.review_state !== "approved" || referral.status === "archived" || referral.removed_at) {
     return <div className="space-y-4"><h1 className="text-2xl font-bold">Screening and Services is locked</h1>
-      <p className="text-sm text-slate-600">Submit Consent and obtain current Intake approval before opening Phase 3.</p>
+      <p className="text-sm text-slate-600">Submit Consent and obtain current Intake approval before opening Phase 4.</p>
       <Link href={`/forms/${id}`} className="text-teal-800 underline">Return to referral</Link></div>;
   }
   const [record, approvals, decisions, contributed] = await Promise.all([
@@ -30,7 +30,7 @@ export default async function ScreeningPage({ params, searchParams }: { params: 
   const empty = screeningServicesSchema.parse({});
   return <div className="space-y-6">
     <Link href={`/forms/${id}`} className="text-sm text-teal-800 underline">Back to referral</Link>
-    <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 3 of 4</p>
+    <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 4 of 5</p>
       <h1 className="mt-2 text-3xl font-bold">Screening and Services</h1>
       <p className="mt-2 text-sm text-slate-600">Intake is approved. No participant name or date of birth is requested in this phase.</p></div>
     {record && <CollapsibleSection title={`Phase status: ${record.review_state.replaceAll("_", " ")}`} contentClassName="mt-5 space-y-3">

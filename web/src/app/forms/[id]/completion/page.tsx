@@ -20,7 +20,7 @@ export default async function CompletionPage({ params, searchParams }: { params:
   const screening = await getScreeningServices(user, id);
   if (!referral.has_consent || referral.review_state !== "approved" || screening?.review_state !== "approved" || referral.status === "archived" || referral.removed_at) {
     return <div className="space-y-4"><h1 className="text-2xl font-bold">Program Completion is locked</h1>
-      <p className="text-sm text-slate-600">Submit Consent and obtain current Intake and Screening and Services approval before opening Phase 4.</p>
+      <p className="text-sm text-slate-600">Submit Consent and obtain current Intake and Screening and Services approval before opening Phase 5.</p>
       <Link href={`/forms/${id}`} className="text-teal-800 underline">Return to referral</Link></div>;
   }
   const [record, approvals, decisions, contributed] = await Promise.all([
@@ -31,7 +31,7 @@ export default async function CompletionPage({ params, searchParams }: { params:
   const query = await searchParams;
   return <div className="space-y-6">
     <Link href={`/forms/${id}`} className="text-sm text-teal-800 underline">Back to referral</Link>
-    <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 4 of 4</p>
+    <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 5 of 5</p>
       <h1 className="mt-2 text-3xl font-bold">Program Completion</h1>
       <p className="mt-2 text-sm text-slate-600">Record outcomes at the end of the program. Phase approval does not imply the participant completed the program.</p></div>
     {query.saved === "1" && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">The saved database record is shown below.</p>}

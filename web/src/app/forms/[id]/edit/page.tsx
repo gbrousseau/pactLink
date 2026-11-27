@@ -25,7 +25,7 @@ export default async function Edit({ params, searchParams }: { params: Promise<{
     </div>;
   }
   const imported = await getImportSource(user, id);
-  return <div className="space-y-6"><div><h1 className="text-3xl font-bold">Phase 2: Intake</h1><p className="mt-2 text-sm text-slate-500">Revision {row.revision}. Conflicting changes are rejected, not overwritten. Saving changes creates a working draft; any previously approved version remains intact.</p>
+  return <div className="space-y-6"><div><h1 className="text-3xl font-bold">Phase 3: Intake</h1><p className="mt-2 text-sm text-slate-500">Revision {row.revision}. Conflicting changes are rejected, not overwritten. Saving changes creates a working draft; any previously approved version remains intact.</p>
     {row.review_state === "approved" && <p className="mt-2 text-sm text-amber-800">Saving this correction locks later phases until Intake is approved again. Later records and approvals are retained.</p>}
     {!!imported?.placeholder_fields.length && <p className="mt-2 text-sm font-semibold text-amber-800">Replace generated placeholders before review: {imported.placeholder_fields.join(", ")}.</p>}
     {row.review_state === "pending_review" && <p className="mt-2 text-sm text-amber-800">Saving this draft will cancel the pending review request.</p>}</div>

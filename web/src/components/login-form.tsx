@@ -2,17 +2,12 @@
 import { useActionState } from "react";
 import { loginAction } from "@/app/actions";
 
-export function LoginForm({ hostedDemo = false }: { hostedDemo?: boolean }) {
+export function LoginForm({ hostedDemo = false, accounts }: { hostedDemo?: boolean; accounts: { id: string; display_name: string; role: string; group_name: string }[] }) {
   const [state, action, pending] = useActionState(loginAction, {});
   return <form action={action} className="space-y-5">
     <label className="block text-sm font-semibold" htmlFor="account">{hostedDemo ? "Synthetic demo account" : "Development account"}</label>
     <select id="account" name="account" className="input">
-      <option value="north-editor">North team - Editor</option>
-      <option value="north-viewer">North team - Read-only viewer</option>
-      <option value="north-reviewer">North team - Reviewer</option>
-      <option value="south-editor">South team - Editor</option>
-      <option value="south-reviewer">South team - Reviewer</option>
-      <option value="demo-admin">Administrator - All groups</option>
+      {accounts.map((account) => <option key={account.id} value={account.id}>{account.display_name} · {account.role} · {account.role === "admin" ? "All groups" : account.group_name}</option>)}
     </select>
     {state.error && <p role="alert" className="error-box">{state.error}</p>}
     <button disabled={pending} className="btn-primary w-full">{pending ? "Signing in..." : hostedDemo ? "Enter synthetic demo" : "Enter development workspace"}</button>

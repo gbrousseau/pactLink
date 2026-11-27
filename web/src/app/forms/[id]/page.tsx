@@ -18,15 +18,16 @@ import { getScreeningServices } from "@/lib/screening-services";
 import { getProgramCompletion } from "@/lib/program-completion";
 import { currentReferralPhase } from "@/lib/referral-progress";
 import { CollapsibleSection } from "@/components/collapsible-section";
+import { getCaseFile } from "@/lib/case-file";
 
 export default async function Detail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser();
   const { id } = await params;
   const row = await getSubmission(user, id);
   if (!row) notFound();
-  const [audit, revisions, approved, decisions, contributed, importSource, consents, screening, completion] = await Promise.all([
+  const [audit, revisions, approved, decisions, contributed, importSource, consents, screening, completion, caseFile] = await Promise.all([
     getAudit(user, id), getRevisions(user, id), getApprovedVersions(user, id),
-    getReviewDecisions(user, id), isDraftContributor(user, id), getImportSource(user, id), listConsent(user, id), getScreeningServices(user, id), getProgramCompletion(user, id),
+    getReviewDecisions(user, id), isDraftContributor(user, id), getImportSource(user, id), listConsent(user, id), getScreeningServices(user, id), getProgramCompletion(user, id), getCaseFile(user, id),
   ]);
   const edit = canEdit(user, row.group_id);
   const removalHistory = user.role === "admin" && importSource ? await getRemovalHistory(user, id) : [];
@@ -66,14 +67,16 @@ export default async function Detail({ params, searchParams }: { params: Promise
     </div>
     {(await searchParams).saved === "1" && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">The operation completed. This page shows the saved database record.</p>}
     <CollapsibleSection title="Referral phases">
-      <ol className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <li className="rounded-lg border p-3"><strong>1. Consent</strong><p>{row.has_consent ? "Submitted" : "Not submitted"}</p>
+      <ol className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
+        {(user.role === "admin" || user.role === "editor") && <li className="rounded-lg border p-3"><strong>1. Case File</strong><p>{caseFile ? `${user.role === "admin" ? "Saved" : "Submitted"} · Version ${caseFile.version}` : user.role === "admin" ? "Optional · Not started" : "Not submitted"}</p>
+          {(caseFile || (user.role === "admin" && !row.removed_at && row.status !== "archived" && !row.legal_hold)) && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/case-file`}>{caseFile ? "Open Case File" : "Enter Case File"}</Link>}</li>}
+        <li className="rounded-lg border p-3"><strong>2. Consent</strong><p>{row.has_consent ? "Submitted" : "Not submitted"}</p>
           {consents.length > 0 && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/consent`}>View consent</Link>}</li>
-        <li className="rounded-lg border p-3"><strong>2. Intake</strong><p>{!row.has_consent ? "Locked — submit consent" : row.review_state === "approved" ? "Approved" : row.review_state.replaceAll("_", " ")}</p>
+        <li className="rounded-lg border p-3"><strong>3. Intake</strong><p>{!row.has_consent ? "Locked — submit consent" : row.review_state === "approved" ? "Approved" : row.review_state.replaceAll("_", " ")}</p>
           {edit && row.has_consent && row.review_state === "approved" && row.status !== "archived" && !row.removed_at && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/edit`}>Correct approved Intake</Link>}</li>
-        <li className="rounded-lg border p-3"><strong>3. Screening and Services</strong><p>{row.status === "archived" || row.removed_at ? "Locked — restore referral" : !row.has_consent || row.review_state !== "approved" ? "Locked — approve Intake first" : screening ? phaseLabel(screening.review_state) : "Ready to begin"}</p>
+        <li className="rounded-lg border p-3"><strong>4. Screening and Services</strong><p>{row.status === "archived" || row.removed_at ? "Locked — restore referral" : !row.has_consent || row.review_state !== "approved" ? "Locked — approve Intake first" : screening ? phaseLabel(screening.review_state) : "Ready to begin"}</p>
           {row.has_consent && row.review_state === "approved" && row.status !== "archived" && !row.removed_at && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/screening`}>{phaseLinkLabel("Screening and Services", screening?.review_state)}</Link>}</li>
-        <li className="rounded-lg border p-3"><strong>4. Program Completion</strong><p>{row.status === "archived" || row.removed_at ? "Locked — restore referral" : !row.has_consent || row.review_state !== "approved" || screening?.review_state !== "approved" ? "Locked — approve previous phases first" : completion ? phaseLabel(completion.review_state) : "Ready to begin"}</p>
+        <li className="rounded-lg border p-3"><strong>5. Program Completion</strong><p>{row.status === "archived" || row.removed_at ? "Locked — restore referral" : !row.has_consent || row.review_state !== "approved" || screening?.review_state !== "approved" ? "Locked — approve previous phases first" : completion ? phaseLabel(completion.review_state) : "Ready to begin"}</p>
           {row.has_consent && row.review_state === "approved" && screening?.review_state === "approved" && row.status !== "archived" && !row.removed_at && <Link className="mt-2 inline-block text-teal-800 underline" href={`/forms/${id}/completion`}>{phaseLinkLabel("Program Completion", completion?.review_state)}</Link>}</li>
       </ol>
       <p className="text-sm text-amber-900">Synthetic data only. Phase approval does not mean the participant completed the program.</p>

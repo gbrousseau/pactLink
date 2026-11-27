@@ -6,6 +6,7 @@ import { listConsent } from "@/lib/consent";
 import { getSubmission } from "@/lib/submissions";
 import { ConsentForm } from "@/components/consent-form";
 import { CollapsibleSection } from "@/components/collapsible-section";
+import { getCaseFile } from "@/lib/case-file";
 
 export default async function ConsentPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -16,7 +17,8 @@ export default async function ConsentPage({ params }: { params: Promise<{ id: st
   if (row.has_consent && !versions.length) notFound();
   const canChange = canEdit(user, row.group_id) && !row.removed_at && row.status !== "archived";
   if (!row.has_consent && !canChange) notFound();
-  return <div className="space-y-6"><div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 1 of 4</p>
+  const caseFile = !row.has_consent && canChange ? await getCaseFile(user, id) : null;
+  return <div className="space-y-6"><div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 2 of 5</p>
     <h1 className="mt-2 text-3xl font-bold">{versions.length ? "Consent review" : "Submit consent"}</h1></div>
     <Link className="text-sm text-teal-800 underline" href={`/forms/${id}`}>Return to referral</Link>
     {versions.length > 0 && <CollapsibleSection title="Consent versions">
@@ -35,7 +37,7 @@ export default async function ConsentPage({ params }: { params: Promise<{ id: st
     </CollapsibleSection>}
     {canChange && <CollapsibleSection title={versions.length ? "Correct consent" : "Consent form"} className="space-y-4">
       {versions.length > 0 && <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Submitting a correction creates a new Consent version immediately. Consent has no separate approval step; existing Intake and later approvals remain unchanged.</p>}
-      <ConsentForm id={id} revision={row.revision} current={versions[0]} />
+      <ConsentForm id={id} revision={row.revision} current={versions[0]} prefill={caseFile?.answers} />
     </CollapsibleSection>}
   </div>;
 }

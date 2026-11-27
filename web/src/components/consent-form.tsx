@@ -4,15 +4,12 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { consentAction } from "@/app/actions";
 import type { ConsentVersion } from "@/lib/consent";
+import type { CaseFileAnswers } from "@/lib/case-file";
+import { consentInitialValues } from "@/lib/consent-prefill";
 
-export function ConsentForm({ id, revision, current }: { id?: string; revision?: number; current?: ConsentVersion }) {
+export function ConsentForm({ id, revision, current, prefill }: { id?: string; revision?: number; current?: ConsentVersion; prefill?: CaseFileAnswers }) {
   const [state, action, pending] = useActionState(consentAction, {});
-  const [values, setValues] = useState<Record<string, string>>({
-    firstName: current?.first_name ?? "", middleName: current?.middle_name ?? "",
-    lastName: current?.last_name ?? "", dob: current?.date_of_birth ?? "",
-    address: current?.address ?? "", phone: current?.phone ?? "", email: current?.email ?? "",
-    emergencyName: current?.emergency_name ?? "", emergencyPhone: current?.emergency_phone ?? "",
-  });
+  const [values, setValues] = useState<Record<string, string>>(() => consentInitialValues(current, prefill));
   const [reviewNote, setReviewNote] = useState(current?.review_note ?? "");
   const [agreed, setAgreed] = useState(false);
   const [signed, setSigned] = useState(false);
@@ -30,6 +27,7 @@ export function ConsentForm({ id, revision, current }: { id?: string; revision?:
   return <form action={action} className="panel space-y-6">
     {id && <><input type="hidden" name="id" value={id} /><input type="hidden" name="revision" value={revision} /></>}
     <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Synthetic data and synthetic PDFs only. The confirmations are staff attestations, not verification of a signature or legal consent. Withdrawal is not implemented.</p>
+    {!current && prefill && <p className="text-sm text-slate-600">Available identity and contact fields were prefilled from the Case File. Verify them before submitting.</p>}
     {current && <p className="text-sm text-slate-600">Submitting creates a new consent version; previous versions and documents remain available. A document is optional for each version.</p>}
     {state.error && <p role="alert" className="error-box">{state.error} If you selected a PDF, check that it is still selected before retrying.</p>}
     <div className="grid gap-5 md:grid-cols-2">{fields.map((field) => <label key={field.name} className="block text-sm font-semibold">
