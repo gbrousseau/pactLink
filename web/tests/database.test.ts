@@ -16,6 +16,7 @@ import { loadRedcapCodebook } from "../src/lib/redcap-codebook";
 import { caseFileSchema, downloadCaseFilePdf, downloadCasePhoto, getCaseFile, listCaseNotifications, markCaseNotificationsRead, parseCaseFile, parseCasePhoto, publishCaseFile, saveCaseFile } from "../src/lib/case-file";
 import { consentInitialValues } from "../src/lib/consent-prefill";
 import { listNavigators, saveNavigator } from "../src/lib/navigators";
+import { addReferralNote, listAllReferralNotes, listReferralNotes, maxNoteLength } from "../src/lib/referral-notes";
 import {
   getScreeningServices, getScreeningServiceApprovals, parseScreeningForm, reviewScreeningServices,
   saveScreeningServices, screeningServicesSchema,
@@ -119,6 +120,87 @@ suite("PostgreSQL workflow (isolated temporary database)", () => {
     await database().query(await readFile(new URL("../db/009-program-completion.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/010-case-file.sql", import.meta.url), "utf8"));
     await database().query(await readFile(new URL("../db/011-case-notifications.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/012-demo-role-names.sql", import.meta.url), "utf8"));
+    await database().query(await readFile(new URL("../db/013-referral-notes.sql", import.meta.url), "utf8"));
+  });
+  it("shares append-only referral notes within the group and audits successful additions", async () => {
+    const id = await saveCaseFile(admin, parseCaseFile(new FormData()), null);
+    const revision = (await getSubmission(admin, id))!.revision;
+    const first = await addReferralNote(north, id, "  Synthetic navigator update  ");
+    const second = await addReferralNote(reviewer, id, "Synthetic analyst update");
+    const third = await addReferralNote(admin, id, "Synthetic administrator update");
+    expect(first.content).toBe("Synthetic navigator update");
+    expect((await listReferralNotes(viewer, id)).notes.map((note) => note.id)).toEqual([third.id, second.id, first.id]);
+    expect((await listReferralNotes(viewer, id)).notes[1]).toMatchObject({ content: second.content, author: "Demo North Analyst" });
+    await expect(addReferralNote(viewer, id, "Not permitted")).rejects.toMatchObject({ code: "forbidden" });
+    await expect(addReferralNote(south, id, "Wrong group")).rejects.toMatchObject({ code: "missing" });
+    await expect(listReferralNotes(south, id)).rejects.toMatchObject({ code: "missing" });
+    await expect(listAllReferralNotes(reviewer)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(addReferralNote(north, id, "   ")).rejects.toMatchObject({ code: "invalid" });
+    await expect(addReferralNote(north, id, "x".repeat(maxNoteLength + 1))).rejects.toMatchObject({ code: "invalid" });
+    await expect(database().query("UPDATE referral_notes SET content='changed' WHERE id=$1", [first.id])).rejects.toThrow("append-only");
+    await expect(database().query("DELETE FROM referral_notes WHERE id=$1", [first.id])).rejects.toThrow("append-only");
+    expect((await getSubmission(admin, id))!.revision).toBe(revision);
+    const events = await database().query("SELECT action,changed_fields FROM audit_events WHERE submission_id=$1 AND action='add_referral_note'", [id]);
+    expect(events.rows).toEqual(Array(3).fill({ action: "add_referral_note", changed_fields: ["notes"] }));
+    const all = await listAllReferralNotes(admin);
+    expect(all.notes.find((note) => note.id === first.id)).toMatchObject({ submission_id: id, participant_id: null, group_name: "North team" });
+    await database().query("UPDATE submissions SET status='archived' WHERE id=$1", [id]);
+    await expect(addReferralNote(admin, id, "Archived")).rejects.toMatchObject({ code: "invalid" });
+    expect((await listReferralNotes(viewer, id)).notes).toHaveLength(3);
+  });
+  it("paginates referral and administrator notes without a note-count limit", async () => {
+    const id = await saveSubmission(north, answers);
+    for (let i = 0; i < 23; i++) await addReferralNote(north, id, `Synthetic note ${i}`);
+    const first = await listReferralNotes(north, id);
+    expect(first.notes).toHaveLength(20);
+    expect(first.hasMore).toBe(true);
+    const second = await listReferralNotes(north, id, first.notes[19].id);
+    expect(second.notes).toHaveLength(3);
+    expect(second.hasMore).toBe(false);
+    expect(new Set([...first.notes, ...second.notes].map((note) => note.id)).size).toBe(23);
+    const adminFirst = await listAllReferralNotes(admin);
+    const adminOlder = await listAllReferralNotes(admin, adminFirst.notes[19].id);
+    expect(adminFirst.hasMore).toBe(true);
+    expect(adminOlder.notes.some((note) => note.submission_id === id)).toBe(true);
+    expect(adminFirst.notes[0].participant_id).toBeTruthy();
+    await expect(listReferralNotes(north, id, "9999999999999999999")).rejects.toMatchObject({ code: "invalid" });
+    await expect(listReferralNotes(north, id, "not-a-number")).rejects.toMatchObject({ code: "invalid" });
+  });
+  it("rolls back a note when its audit event cannot be saved", async () => {
+    const id = await saveSubmission(north, answers);
+    await database().query(`CREATE FUNCTION fail_note_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.action='add_referral_note' THEN RAISE EXCEPTION 'Simulated note audit failure'; END IF; RETURN NEW; END; $$;
+      CREATE TRIGGER test_note_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_note_audit();`);
+    try {
+      await expect(addReferralNote(north, id, "Synthetic note")).rejects.toThrow("Simulated note audit failure");
+      expect((await listReferralNotes(north, id)).notes).toEqual([]);
+    } finally {
+      await database().query("DROP TRIGGER test_note_audit ON audit_events; DROP FUNCTION fail_note_audit();");
+    }
+  });
+  it("renames only unchanged default demo accounts without changing roles or customized names", async () => {
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`UPDATE app_users SET display_name=CASE id
+        WHEN 'north-editor' THEN 'Demo North Editor'
+        WHEN 'south-editor' THEN 'Custom Navigator'
+        WHEN 'north-reviewer' THEN 'Demo North Reviewer'
+        WHEN 'south-reviewer' THEN 'Demo South Reviewer'
+        END WHERE id IN ('north-editor','south-editor','north-reviewer','south-reviewer')`);
+      await client.query(await readFile(new URL("../db/012-demo-role-names.sql", import.meta.url), "utf8"));
+      const users = await client.query("SELECT id,display_name,role FROM app_users WHERE id IN ('north-editor','south-editor','north-reviewer','south-reviewer') ORDER BY id");
+      expect(users.rows).toEqual([
+        { id: "north-editor", display_name: "Demo North Program Navigator", role: "editor" },
+        { id: "north-reviewer", display_name: "Demo North Analyst", role: "reviewer" },
+        { id: "south-editor", display_name: "Custom Navigator", role: "editor" },
+        { id: "south-reviewer", display_name: "Demo South Analyst", role: "reviewer" },
+      ]);
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
   });
   it("saves optional case files without blocking consent, scopes access, retains photos and rejects stale edits", async () => {
     const form = new FormData();

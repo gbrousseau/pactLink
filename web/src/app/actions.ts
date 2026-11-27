@@ -16,9 +16,12 @@ import { parseCompletionForm } from "@/lib/program-completion-schema";
 import { reviewProgramCompletion, saveProgramCompletion } from "@/lib/program-completion";
 import { markCaseNotificationsRead, parseCaseFile, parseCasePhoto, publishCaseFile, saveCaseFile } from "@/lib/case-file";
 import { saveNavigator } from "@/lib/navigators";
+import { addReferralNote, listReferralNotes, type DisplayReferralNote } from "@/lib/referral-notes";
 
 export type FormState = { message?: string; errors?: FieldErrors; answers?: Answers };
 export type ActionState = { error?: string };
+export type NoteResult = { note: DisplayReferralNote; error?: never } | { note?: never; error: string };
+export type NotePageResult = { notes: DisplayReferralNote[]; hasMore: boolean; error?: never } | { notes?: never; hasMore?: never; error: string };
 export type ImportState = {
   error?: string; hash?: string; total?: number; valid?: number; mockDob?: number;
   issues?: ImportIssue[]; imported?: number;
@@ -29,6 +32,20 @@ function safeError(error: unknown) {
   const incident = crypto.randomUUID();
   console.error("Workflow operation failed", { incident, category: error instanceof Error ? error.name : "unknown" });
   return `The operation failed. Your changes were not saved. Reference: ${incident}. Please retry or contact support.`;
+}
+export async function addReferralNoteAction(id: string, content: string): Promise<NoteResult> {
+  const user = await requireUser();
+  try {
+    const note = await addReferralNote(user, id, content);
+    return { note: { ...note, created_at: note.created_at.toISOString() } };
+  } catch (error) { return { error: safeError(error) }; }
+}
+export async function loadReferralNotesAction(id: string, before?: string): Promise<NotePageResult> {
+  const user = await requireUser();
+  try {
+    const result = await listReferralNotes(user, id, before);
+    return { ...result, notes: result.notes.map((note) => ({ ...note, created_at: note.created_at.toISOString() })) };
+  } catch (error) { return { error: safeError(error) }; }
 }
 export async function loginAction(_: ActionState, form: FormData): Promise<ActionState> {
   if (!demoAccessEnabled()) return { error: "Demo login is disabled. Enable the explicit development or hosted demo configuration." };

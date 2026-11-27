@@ -2,7 +2,7 @@
 
 **Status:** Planning and client/agency discovery — implementation not started.  
 **Goal:** Replace synthetic demo sign-in with an approved, supportable identity
-flow that preserves the current group-scoped viewer/editor/administrator
+flow that preserves the current group-scoped viewer/program navigator/analyst/administrator
 experience and can be assessed for CJIS and HIPAA requirements.
 
 > **Important:** This plan is not a compliance determination, legal opinion,
@@ -16,8 +16,8 @@ experience and can be assessed for CJIS and HIPAA requirements.
 ## Current flow and boundary
 
 The development prototype currently offers a login page where a user chooses one
-of four synthetic demo accounts (North editor, North viewer, South editor, or
-administrator). It creates a random token in an HTTP-only cookie and stores a hash
+among synthetic demo accounts, including program navigators, analysts, a viewer,
+and an administrator. It creates a random token in an HTTP-only cookie and stores a hash
 of that token in PostgreSQL. The app reloads the user's role and group from the
 database, applies group restrictions server-side, logs successful login and logout,
 and expires demo sessions after 20 minutes idle or 8 hours maximum. The session
@@ -29,7 +29,8 @@ authentication patterns**.
 The target flow preserves this application behavior:
 
 - Viewers can read authorized records in their permitted group(s).
-- Editors can read and modify records allowed by their group and form-type grants.
+- Program navigators can read and modify records allowed by their group and form-type grants.
+- Analysts can review and approve or return drafts within their group.
 - Administrators have only the explicitly approved application-management and
   cross-group privileges.
 - Authorization is checked on the server for every record, search, history,

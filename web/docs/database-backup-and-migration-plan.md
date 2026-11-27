@@ -27,7 +27,7 @@ requirements, not chosen by this prototype.
   synthetic demo database only. Neither mode is a real-data production migration
   mechanism.
 - The setup script applies `001-initial.sql` and then migrations
-  `002-review-workflow.sql` through `005-redcap-prototype.sql`. It creates a
+  `002-review-workflow.sql` through `013-referral-notes.sql`. It creates a
   `schema_migrations` journal for migrations 002 onward; migration 001 is the
   initial baseline, not a journaled migration. Preserve this distinction when
   designing a production migration runner.

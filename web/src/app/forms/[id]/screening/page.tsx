@@ -10,6 +10,7 @@ import { ScreeningServicesView } from "@/components/screening-services-view";
 import { ScreeningServicesReviewActions } from "@/components/screening-services-review-actions";
 import { CorrectionPrompt } from "@/components/correction-prompt";
 import { CollapsibleSection } from "@/components/collapsible-section";
+import { ReferralNotesPanel } from "@/components/referral-notes-panel";
 
 export default async function ScreeningPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ correct?: string }> }) {
   const user = await requireUser();
@@ -33,6 +34,7 @@ export default async function ScreeningPage({ params, searchParams }: { params: 
     <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 4 of 5</p>
       <h1 className="mt-2 text-3xl font-bold">Screening and Services</h1>
       <p className="mt-2 text-sm text-slate-600">Intake is approved. No participant name or date of birth is requested in this phase.</p></div>
+    <ReferralNotesPanel user={user} referral={referral} />
     {record && <CollapsibleSection title={`Phase status: ${record.review_state.replaceAll("_", " ")}`} contentClassName="mt-5 space-y-3">
       <p className="text-sm text-slate-600">Revision {record.revision} · Updated {record.updated_at.toISOString()} · {record.updated_by}</p>
       {record.return_reason && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-900">Returned: {record.return_reason}</p>}

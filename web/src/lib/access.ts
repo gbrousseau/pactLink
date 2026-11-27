@@ -1,6 +1,13 @@
 export type Role = "viewer" | "editor" | "reviewer" | "admin";
 export type User = { id: string; display_name: string; role: Role; group_id: string; group_name: string };
 
+export const roleLabels: Record<Role, string> = {
+  viewer: "Viewer",
+  editor: "Program Navigator",
+  reviewer: "Analyst",
+  admin: "Administrator",
+};
+
 export function developmentEnabled(env: NodeJS.ProcessEnv = process.env) {
   return env.NODE_ENV !== "production" && env.DEV_AUTH_ENABLED === "true";
 }

@@ -19,6 +19,7 @@ import { getProgramCompletion } from "@/lib/program-completion";
 import { currentReferralPhase } from "@/lib/referral-progress";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { getCaseFile } from "@/lib/case-file";
+import { ReferralNotesPanel } from "@/components/referral-notes-panel";
 
 export default async function Detail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser();
@@ -66,6 +67,7 @@ export default async function Detail({ params, searchParams }: { params: Promise
       </div>}
     </div>
     {(await searchParams).saved === "1" && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">The operation completed. This page shows the saved database record.</p>}
+    <ReferralNotesPanel user={user} referral={row} />
     <CollapsibleSection title="Referral phases">
       <ol className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
         {(user.role === "admin" || user.role === "editor") && <li className="rounded-lg border p-3"><strong>1. Case File</strong><p>{caseFile ? `${user.role === "admin" ? "Saved" : "Submitted"} · Version ${caseFile.version}` : user.role === "admin" ? "Optional · Not started" : "Not submitted"}</p>
@@ -128,7 +130,7 @@ export default async function Detail({ params, searchParams }: { params: Promise
           : "No reviewer-approved version exists yet. Legacy submitted records are not automatically approved."}
         {" "}Approving a referral is not a participant signature or program completion.
       </p>
-      {row.review_state === "legacy" && <p className="mt-3 text-sm text-amber-800">This legacy record has no verified reviewer sign-off. An editor must save it as a draft and request review.</p>}
+      {row.review_state === "legacy" && <p className="mt-3 text-sm text-amber-800">This legacy record has no verified reviewer sign-off. A program navigator or administrator must save it as a draft and request review.</p>}
       {typeof row.answers.reviewNote === "string" && row.answers.reviewNote && <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
         <strong>Intake note for reviewer:</strong><p className="mt-1 whitespace-pre-wrap">{row.answers.reviewNote}</p>
       </div>}
@@ -175,7 +177,7 @@ export default async function Detail({ params, searchParams }: { params: Promise
       {approved.length === 0 && <p className="text-sm text-slate-500">No approved versions yet.</p>}
       <div className="space-y-3">{approved.map((version) => <details key={version.version} className="rounded-lg border border-teal-200 p-4">
         <summary className="cursor-pointer text-sm font-semibold">Approved version {version.version} · {version.reviewer_name} · {version.approved_at.toISOString().slice(0, 10)}</summary>
-        <p className="my-3 text-xs text-slate-500">Reviewed draft revision {version.draft_revision} · Template {version.template_version} · Approved {version.approved_at.toISOString()} · Editors: {version.editor_ids.join(", ")}</p>
+        <p className="my-3 text-xs text-slate-500">Reviewed draft revision {version.draft_revision} · Template {version.template_version} · Approved {version.approved_at.toISOString()} · Contributors: {version.editor_ids.join(", ")}</p>
         <dl className="space-y-3">{Object.entries(version.answers).filter(([key, value]) => !isConsentField(key) && value.length > 0).map(([key, value]) => <div key={key} className="grid gap-1 text-sm sm:grid-cols-2">
           <dt className="text-slate-500">{labels[key] ?? key}</dt><dd className="break-words">{Array.isArray(value) ? value.join("; ") : value}</dd>
         </div>)}</dl>

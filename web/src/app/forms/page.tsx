@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, Search as SearchIcon, ArrowUpRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { roleLabels } from "@/lib/access";
 import { listSubmissions, searchSchema, type ListedSubmission, type Search } from "@/lib/submissions";
 import { programs } from "@/lib/intake-fields";
 import { Status } from "@/components/status";
@@ -38,7 +39,7 @@ export default async function Forms({ searchParams }: { searchParams: Promise<Re
     <div className="grid gap-4 sm:grid-cols-3">
       <div className="panel !p-5"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Available form</p><p className="mt-2 text-lg font-bold">Referral</p><p className="mt-1 text-xs text-slate-500">Packet version 09.24.2026</p></div>
       <div className="panel !p-5"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Matching records</p><p className="mt-2 text-2xl font-bold">{result?.total ?? "--"}</p><p className="mt-1 text-xs text-slate-500">Current filters and access scope</p></div>
-      <div className="panel !p-5"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace access</p><p className="mt-2 text-lg font-bold">{user.role === "admin" ? "All groups" : user.group_name}</p><p className="mt-1 text-xs capitalize text-slate-500">{user.role} permissions</p></div>
+      <div className="panel !p-5"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace access</p><p className="mt-2 text-lg font-bold">{user.role === "admin" ? "All groups" : user.group_name}</p><p className="mt-1 text-xs text-slate-500">{roleLabels[user.role]} permissions</p></div>
     </div>
     <form method="get" className="panel !p-5">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

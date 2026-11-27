@@ -7,6 +7,7 @@ import { getSubmission } from "@/lib/submissions";
 import { ConsentForm } from "@/components/consent-form";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { getCaseFile } from "@/lib/case-file";
+import { ReferralNotesPanel } from "@/components/referral-notes-panel";
 
 export default async function ConsentPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -21,6 +22,7 @@ export default async function ConsentPage({ params }: { params: Promise<{ id: st
   return <div className="space-y-6"><div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 2 of 5</p>
     <h1 className="mt-2 text-3xl font-bold">{versions.length ? "Consent review" : "Submit consent"}</h1></div>
     <Link className="text-sm text-teal-800 underline" href={`/forms/${id}`}>Return to referral</Link>
+    <ReferralNotesPanel user={user} referral={row} />
     {versions.length > 0 && <CollapsibleSection title="Consent versions">
       <p className="text-xs text-slate-500">Confirmations are staff attestations, not verification of signatures or legal consent. Withdrawal is not implemented. Documents are optional and retained by version.</p>
       {versions.map((consent) => <details key={consent.version} className="rounded-lg border border-slate-200 p-4" open={consent.version === versions[0].version}>

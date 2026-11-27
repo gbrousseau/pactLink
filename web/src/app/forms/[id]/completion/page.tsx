@@ -11,6 +11,7 @@ import { ProgramCompletionReview } from "@/components/program-completion-review"
 import { ProgramCompletionView } from "@/components/program-completion-view";
 import { CorrectionPrompt } from "@/components/correction-prompt";
 import { CollapsibleSection } from "@/components/collapsible-section";
+import { ReferralNotesPanel } from "@/components/referral-notes-panel";
 
 export default async function CompletionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; correct?: string }> }) {
   const user = await requireUser();
@@ -34,6 +35,7 @@ export default async function CompletionPage({ params, searchParams }: { params:
     <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 5 of 5</p>
       <h1 className="mt-2 text-3xl font-bold">Program Completion</h1>
       <p className="mt-2 text-sm text-slate-600">Record outcomes at the end of the program. Phase approval does not imply the participant completed the program.</p></div>
+    <ReferralNotesPanel user={user} referral={referral} />
     {query.saved === "1" && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">The saved database record is shown below.</p>}
     {record && <CollapsibleSection title={`Phase status: ${record.review_state.replaceAll("_", " ")}`} contentClassName="mt-5 space-y-3">
       <p className="text-sm text-slate-600">Revision {record.revision} · Updated {record.updated_at.toISOString()} · {record.updated_by}</p>

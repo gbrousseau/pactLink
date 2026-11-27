@@ -101,12 +101,16 @@ if available, and never enter real participant or protected information.
 
 | Account | Scope |
 | --- | --- |
-| North Editor | Create/read/edit/archive/restore North Intake records |
+| North Program Navigator | Create/read/edit/archive/restore North Intake records |
 | North Viewer | Read North records and protected history only |
-| North Reviewer | Review and approve/return North drafts, but cannot create or edit intakes |
-| South Editor | Create/read/edit/archive/restore South Intake records |
-| South Reviewer | Review and approve/return South drafts, but cannot create or edit intakes |
+| North Analyst | Review and approve/return North drafts, but cannot create or edit intakes |
+| South Program Navigator | Create/read/edit/archive/restore South Intake records |
+| South Analyst | Review and approve/return South drafts, but cannot create or edit intakes |
 | Administrator | Read/edit/archive/restore/review across both groups; select a group when creating a Case File |
+
+Program Navigator and Analyst are display names for the existing `editor` and
+`reviewer` role codes; permissions remain unchanged. The migration renames only
+unchanged default demo account names and preserves customized names and user IDs.
 
 Sessions use random, HTTP-only, SameSite=Strict cookies with hashed tokens in the
 database. Idle expiry is 20 minutes; maximum lifetime is 8 hours. The inactivity
@@ -116,12 +120,25 @@ Next.js Server Actions enforce same-origin requests.
 
 ## Implemented
 
+- The color theme can follow the device setting or be set to light or dark using
+  the device, sun, and moon icons on the sign-in page and in the workspace.
+  The preference is stored in this browser, not in the user profile.
+- Referral notes are shared with all users who can access the referral, including
+  viewers; navigators, analysts, and administrators can add them. They are
+  append-only, audited, and independent of phase approval or unsaved form edits.
+  There is no limit on the number of notes; each note can contain up to 30,000
+  characters. Save a new referral before adding notes, and restore an archived
+  or removed referral before adding more. Administrators can browse notes across
+  groups under All referral notes. Refresh to see updates made by others.
+  **Do not put names, dates of birth, other identifying information, or
+  restricted Consent or Case File details in shared notes.** Free text is not
+  automatically screened, and every authorized note reader can see its contents.
 - Phase 1 Case File is optional and can be saved before or after Consent. It
   records identity, contact and incident information, an optional reviewer note,
   and an optional synthetic JPEG or PNG up to 4 MiB. All fields are optional.
   Only administrators can create or edit Case Files. They save a draft and
-  explicitly submit a version to active navigators (editors) in the referral's
-  group. Navigators see only submitted versions; reviewers and viewers cannot
+  explicitly submit a version to active program navigators in the referral's
+  group. Navigators see only submitted versions; analysts and viewers cannot
   access Case Files or photos. Later drafts remain private until resubmitted.
   Existing Case Files are not automatically submitted during migration.
   Saves retain immutable versions and photo access is audited. Basic format
@@ -167,8 +184,8 @@ Next.js Server Actions enforce same-origin requests.
   referral, ASAM date/location, and service-by-service referral/outcome/reason
   fields. ASAM location is free text. Service statuses are validated against
   contradictions, controlled options are server-validated, and every saved
-  revision is audited and retained. Editors can save and request review;
-  reviewers approve or return with a reason, using separation of duties.
+  revision is audited and retained. Program navigators can save and request review;
+  eligible analysts or administrators approve or return with a reason, using separation of duties.
   Participant identity is not asked again. Because the source packet marks no
   Screening question as required, it allows blank answers and leaves completeness
   to staff review; the service matrix is explicitly optional where not referred.
@@ -177,13 +194,13 @@ Next.js Server Actions enforce same-origin requests.
   reasons and outcomes, justice and charge disposition, housing, employment,
   health and other information from the supplied completion form. Participant
   identity is not collected again. Draft answers may remain blank; staff review
-  completeness. Editors request review of a saved draft, and a different
-  reviewer approves or returns it; revisions and approved snapshots are retained.
+  completeness. Program navigators request review of a saved draft, and an
+  eligible analyst or administrator approves or returns it; revisions and approved snapshots are retained.
   Phase approval means the form was reviewed, not that the participant
   completed the program. Consent and all three later phases include optional
   reviewer notes retained in their respective versions. Real reporting
   definitions and reports based on these records remain unimplemented.
-- **REDCap data preparation** creates a synthetic JSON prototype, available to reviewers and
+- **REDCap data preparation** creates a synthetic JSON prototype, available to analysts and
   administrators for an active, currently approved Intake. It uses only an
   immutable, currently approved Intake, Screening and Services, and Program
   Completion snapshots for prefill. Source versions are recorded with each
@@ -198,7 +215,7 @@ Next.js Server Actions enforce same-origin requests.
   is sent to REDCap. The application stores each generated file, audits creation,
   download, removal and restoration, and retains removed content. A legal hold
   prevents removal. Previously generated files remain available to authorized
-  reviewers and administrators if the Intake is later edited or archived,
+  analysts and administrators if the Intake is later edited or archived,
   except older prototypes containing restricted identity fields cannot be downloaded.
   A real project-specific import specification and security approval are
   required before any operational use.
@@ -222,21 +239,21 @@ Next.js Server Actions enforce same-origin requests.
   Intake has an optional, versioned note for the reviewer.
 - An always-visible per-question and per-step completion checklist for unanswered
   questions, including conditional and "Other" answers.
-- Every create or edit saves as a draft. Editors request review of a saved draft
-  only after answering all applicable questions. A reviewer or administrator in
+- Every create or edit saves as a draft. Program navigators request review of a saved draft
+  only after answering all applicable questions. An analyst or administrator in
   scope can approve that exact revision or return it with a required reason.
 - The form library and referral header show the current phase and its state,
   considering prerequisite locks. The phase list shows each phase separately.
   The Awaiting review filter includes accessible pending reviews across all
   three reviewed phases. Refresh to see changes made by other users.
 - Approved Intake, Screening and Services, and Program Completion phases are
-  read-only until an editor explicitly chooses to correct them. Saving an Intake
+  read-only until a program navigator or administrator explicitly chooses to correct them. Saving an Intake
   or Screening correction creates a draft and locks later phases until that
   phase is reapproved. Later records and approvals are retained and become
   available again without another review. Correcting Consent submits a new
   version immediately; Consent has no separate review step and does not change
   later approvals.
-- Reviewers cannot edit intakes. Reviewers and administrators cannot approve or
+- Analysts cannot edit intakes. Analysts and administrators cannot approve or
   return a draft they edited or submitted for review. All contributors since the
   preceding approval are considered, not just the latest editor.
 - Approval stores a separate immutable full-answer snapshot with the template

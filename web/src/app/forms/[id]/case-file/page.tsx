@@ -11,6 +11,7 @@ import { CollapsibleSection } from "@/components/collapsible-section";
 import { CaseFilePublish } from "@/components/case-file-publish";
 import { CaseFileRead } from "@/components/case-file-read";
 import { caseFileLabels } from "@/lib/case-file-fields";
+import { ReferralNotesPanel } from "@/components/referral-notes-panel";
 
 export default async function CaseFilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ submitted?: string }> }) {
   const user = await requireUser();
@@ -25,6 +26,7 @@ export default async function CaseFilePage({ params, searchParams }: { params: P
   return <div className="space-y-6">
     <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 1 of 5</p><h1 className="mt-2 text-3xl font-bold">Case File</h1></div>
     <Link href={`/forms/${id}`} className="text-sm text-teal-800 underline">Return to referral</Link>
+    <ReferralNotesPanel user={user} referral={row} />
     {(await searchParams).submitted === "1" && <p role="status" className="rounded-lg bg-teal-50 p-4 text-sm text-teal-900">Case File submitted for in-app notification. Email and text were not sent.</p>}
     {unread && current && <CaseFileRead id={id} version={current.version} />}
     {current && <CollapsibleSection title={user.role === "admin" ? "Saved Case File" : "Submitted Case File"}>

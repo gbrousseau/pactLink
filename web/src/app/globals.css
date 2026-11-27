@@ -4,6 +4,47 @@
   --background: #f5f7fa;
   --foreground: #172638;
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --color-slate-50: #1e293b;
+  --color-slate-100: #273449;
+  --color-slate-200: #40516a;
+  --color-slate-300: #64748b;
+  --color-slate-400: #a9bacd;
+  --color-slate-500: #b6c4d6;
+  --color-slate-600: #cbd5e1;
+  --color-slate-700: #d8e2ee;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+  --color-amber-50: #3b2b13;
+  --color-amber-100: #4a3515;
+  --color-amber-200: #795b27;
+  --color-amber-300: #a77a31;
+  --color-amber-400: #d5a545;
+  --color-amber-800: #fcd98a;
+  --color-amber-900: #fde4aa;
+  --color-amber-950: #fef0cf;
+  --color-blue-50: #172d48;
+  --color-blue-200: #395b7b;
+  --color-blue-800: #bfdbfe;
+  --color-blue-900: #d4e5ff;
+  --color-blue-950: #e2eeff;
+  --color-red-50: #3c1e28;
+  --color-red-200: #884358;
+  --color-red-700: #fda4af;
+  --color-red-800: #fecdd3;
+  --color-rose-50: #3c1e2b;
+  --color-rose-100: #4b2434;
+  --color-rose-200: #76374d;
+  --color-rose-300: #a5536d;
+  --color-rose-700: #fda4af;
+  --color-rose-800: #fecdd3;
+  --color-rose-900: #ffe4e6;
+  --color-teal-50: #123631;
+  --color-teal-200: #326c63;
+}
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -24,6 +65,13 @@ body {
   .missing-answer { @apply rounded-lg border border-rose-300 bg-rose-50/60 p-3 ring-1 ring-rose-200; }
   .step-incomplete { @apply border border-rose-300 bg-rose-50 text-rose-800 ring-1 ring-rose-200 hover:bg-rose-100; }
 }
+:root[data-theme="dark"] :is(.panel, .input, .btn-secondary, .bg-white) { background-color: #1e293b; }
+:root[data-theme="dark"] .input { color: #f1f5f9; }
+:root[data-theme="dark"] :is(.text-teal-700, .text-teal-800, .text-teal-900) { color: #99f6e4; }
+:root[data-theme="dark"] .nav-link:hover { background-color: #273449; color: #99f6e4; }
+:root[data-theme="dark"] .btn-secondary:hover { background-color: #273449; }
+:root[data-theme="dark"] :focus-visible { outline-color: #5eead4; }
+:root[data-theme="dark"] input[aria-invalid="true"] { border-color: #fda4af; }
 :focus-visible { outline: 2px solid #0f766e; outline-offset: 3px; }
 input[aria-invalid="true"] { border-color: #b91c1c; }
 [hidden] { display: none !important; }

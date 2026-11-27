@@ -10,6 +10,7 @@ export default async function NewIntake() {
   return <div className="space-y-6">
     <div><p className="text-xs font-bold uppercase tracking-widest text-teal-700">Phase 1 of 5</p><h1 className="mt-2 text-3xl font-bold">New referral: Case File</h1>
       <p className="mt-2 text-sm text-slate-500">Select the referral group. Save a Case File or skip directly to Consent. Synthetic data only.</p></div>
+    <p className="text-sm text-slate-600">Save the Case File or Consent first to add referral notes.</p>
     <CaseFileForm groups={groups.rows} />
   </div>;
 }

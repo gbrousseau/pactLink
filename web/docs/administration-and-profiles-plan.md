@@ -5,7 +5,8 @@
 real profile images in the prototype.
 
 This plan describes a future administration and profile-management area for the
-Deflection Workspace. It preserves the current group-scoped viewer/editor/admin
+Deflection Workspace. It preserves the current group-scoped viewer, program navigator,
+analyst, and administrator
 application model while recognizing that production identity and authorization
 must integrate with the organization-approved identity provider and CJIS/HIPAA
 controls. See the [login and authentication plan](./login-and-authentication-plan.md)
